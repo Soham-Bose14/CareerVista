@@ -7,7 +7,7 @@ import { Button } from "@chakra-ui/react";
 import { useToast } from "@chakra-ui/react";
 import axios from "axios";
 
-import { useHistory } from "react-router-dom";
+// import { useHistory } from "react-router-dom";
 
 const Company = () => {
     const [companyID, setCompanyID] = useState();
@@ -16,7 +16,7 @@ const Company = () => {
     const [loading, setLoading] = useState();
 
     const toast = useToast();
-    const history = useHistory();
+    // const history = useHistory();
 
     const submitHandler = async() => {
         if(!companyID || !companyName || !jobDescription){
@@ -77,7 +77,7 @@ const Company = () => {
     
             
     
-            <Button colorScheme="red" width="100%" style={{ marginTop:15 }} onClick={submitHandler} isLoading={loading}>
+            <Button colorScheme="red" color="red" width="50%" style={{ marginTop:15 }} onClick={submitHandler} isLoading={loading}>
                 Submit
             </Button>
             
