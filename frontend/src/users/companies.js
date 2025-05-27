@@ -19,6 +19,13 @@ const Company = () => {
     // const history = useHistory();
 
     const submitHandler = async() => {
+
+        const formData = new FormData();
+
+        formData.append("companyID", companyID);
+        formData.append("companyName", companyName);
+        formData.append("jobDescription", jobDescription);
+
         if(!companyID || !companyName || !jobDescription){
             toast({
                 title: "Please fill all the details.",
@@ -35,7 +42,7 @@ const Company = () => {
                     "Content-type": "application/json",
                 },
             };
-            const { data } = await axios.post("/jobDescription", { companyID, companyName, jobDescription }, config);
+            const { data } = await axios.post("http://localhost:4000/uploadJobDescription", formData, config);
 
             toast({
                 title: "Registration Successful",

@@ -6,19 +6,53 @@ import {
   FormLabel,
   Button,
   Text,
+  useToast,
 } from "@chakra-ui/react";
+import axios from "axios";
 
 
 const UploadResume = () => {
-    const [email, setEmail] = useState();
-    const [name, setName] = useState();
-    const [file, setFile] = useState(null);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [file, setFile] = useState(null);
+  const toast = useToast(); 
 
-    const handleChange = (event) => {
-    const uploadedFile = event.target.files[0];
+  const handleChange = (event) => {
+    const uploadedFile = event.target.files[0]; 
     setFile(uploadedFile);
     console.log("File uploaded:", uploadedFile);
   };
+
+  const handleSubmit = async () => {
+    const formData = new FormData();
+
+    formData.append("myFile", file);
+    formData.append("name", name);
+    formData.append("email", email);
+
+    try {
+      await axios.post("http://localhost:4000/uploadResume", formData);
+      toast({
+        title: "Resume uploaded successfully",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      setEmail("");
+      setName("");
+      setFile(null);
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error.response?.data?.message || "Try again.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+
 return (
     <Box maxW="md" mx="auto" mt={10} p={6} borderWidth="1px" borderRadius="lg">
       <FormControl mb={4} isRequired>
@@ -44,7 +78,7 @@ return (
         <FormLabel>Upload PDF or Word Document</FormLabel>
         <Input
           type="file"
-          accept=".pdf,.doc,.docx"
+          accept=".pdf,.doc,.docx, .txt"
           onChange={handleChange}
           p={1}
         />
@@ -56,7 +90,7 @@ return (
         </Text>
       )}
 
-      <Button colorScheme="teal" isDisabled={!file || !name || !email}>
+      <Button colorScheme="teal" isDisabled={!file || !name || !email} onClick={handleSubmit}>
         Submit
       </Button>
     </Box>

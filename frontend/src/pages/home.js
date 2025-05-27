@@ -30,9 +30,9 @@ const Home = () => {
             borderRadius="lg"
             borderWidth="1px"
         >
-        <h2 fontSize='7xl' fontFamily='Work sans' color='green'>Career Vista: A Deep Insight Into Your Resume</h2>
+        <h2 fontSize='7xl' fontFamily='Work sans' color='green.600'>Career Vista: A Deep Insight Into Your Resume</h2>
         </Box>
-        <Box bg="orange" w="50%" p={4} borderRadius="1g" color="black" borderWidth="1px">
+        <Box bg="orange" w="50%" p={4} borderRadius="lg" color="black" borderWidth="1px">
             <Tabs variant="soft-rounded" colorScheme="red">
                 <TabList mb="1em">
                     <Tab width="50%">Company</Tab>
