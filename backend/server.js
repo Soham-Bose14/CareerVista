@@ -8,6 +8,8 @@ const jdModel = require('./Models/jobDescriptionModel');
 const { Readable } = require('stream');
 const connectDB = require('./config/database');
 const fileUpload = require('express-fileupload');
+const { spawn } = require('child_process');
+const { ObjectId } = require('mongodb');
 
 dotenv.config();
 connectDB();
@@ -26,6 +28,24 @@ mongoose.connection.once('open', () => {
     });
     console.log("GridFSBucket ready.");
 });
+
+const getFileBufferFromGridFS = async(fileID) => {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+
+        const downloadStream = gfsBucket.openDownloadStream(new ObjectId(fileID));
+
+        downloadStream.on('data', (chunk) => {
+            chunks.push(chunk);
+        });
+        downloadStream.on('end', () => {
+            resolve(Buffer.concat(chunks));
+        });
+        downloadStream.on('error', (err) => {
+            reject(err);
+        });
+    });
+};
 
 app.post('/uploadResume', async (req, res) => {
     try {
@@ -93,6 +113,51 @@ app.post('/uploadJobDescription', async (req, res) => {
     }catch(error){
         console.error('Error uploading job description: ', error);
         res.status(500).json({ message: 'Server error while uploading job description'});
+    }
+});
+
+app.post('/compareResumeToJD', async(req, res) => {
+    try{
+        const { resumeFileID } = req.body;
+        if(!resumeFileID) return res.status(400).json({ message: 'Resume file ID is required' });
+
+        const resumeBuffer = await getFileBufferFromGridFS(resumeFileID);
+        const resumeBase64 = resumeBuffer.toString('base64');
+
+        const latestJD = await jdModel.findOne().sort({ createdAt: -1 }).exec();
+
+        if(!latestJD) return res.status(404).json({ message: 'No job description found' });
+
+        const jdText = latestJD.jobDescription;
+
+        const pythonProcess = spawn('python', ['compute_similarity.py']);
+
+        const payLoad = JSON.stringify({
+            resumeBase64,
+            jdText,
+        });
+
+        pythonProcess.stdin.write(payLoad);
+        pythonProcess.stdin.end();
+
+        pythonProcess.stdout.on('data', (data) => {
+            const similarityScore = parseFloat(data.toString().trim());
+
+            if(isNaN(similarityScore)){
+                return res.status(500).json({ message: 'Invalid similarity score from python script' });
+            }
+
+            res.json({ similarityScore });
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            console.error('Python error:', data.toString());
+        });
+
+    }
+    catch(error){
+        console.error('Error:', error);
+        res.status(500).json({ message: 'Server error' });
     }
 });
 

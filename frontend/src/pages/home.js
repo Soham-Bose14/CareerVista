@@ -9,12 +9,37 @@ import {
     TabPanel,
     TabPanels,
     Tabs,
+    Button,
 } from "@chakra-ui/react";
 
 import Company from "../users/companies";
 import UploadResume from "../users/jobSeekers";
 
 const Home = () => {
+
+    const compareResumeToJD = async() => {
+        const resumeFileID = document.getElementById('resumeFileID').value;
+        try{
+            const response = await fetch('http://localhost:4000/compareResumeToJD', {
+                method: 'POST',
+                headers: {
+                    'Content-type': 'application/json',
+                },
+                body: JSON.stringify({ resumeFileID }),
+            });
+
+            if(!response.ok){
+                throw new Error('Failed to fetch similarity score');
+            }
+            const data = await response.json();
+            alert(`Similarity score: ${(data.similarityScore*100)}%`);
+        }
+        catch(error){
+            console.error('Error comparing resume:', error);
+            alert('An error occurred while comparing the resume');
+        }
+    };
+
     return <Container maxW='xl' centerContent
     bgImage={`url(${bgImage})`}
     bgSize="cover"
@@ -48,7 +73,12 @@ const Home = () => {
                 </TabPanels>
 
             </Tabs>
+                <input type="text" id="resumeFileID" placeholder="Enter Resume File ID" />
+            <Button colorScheme="teal" onClick={compareResumeToJD}>
+                Find Similarity
+            </Button>
         </Box>
+
     </Container>
 };
 

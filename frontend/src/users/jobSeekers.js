@@ -52,8 +52,12 @@ const UploadResume = () => {
     }
   };
 
+  const findSimilarity = async() => {
 
-return (
+  };
+
+
+  return (
     <Box maxW="md" mx="auto" mt={10} p={6} borderWidth="1px" borderRadius="lg">
       <FormControl mb={4} isRequired>
         <FormLabel>Name</FormLabel>
