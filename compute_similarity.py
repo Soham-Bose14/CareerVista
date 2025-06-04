@@ -11,7 +11,6 @@ import re
 
 nltk.download(['stopwords', 'punkt'], quiet=True)
 
-
 from pdfminer.high_level import extract_text as extract_pdf_text
 import docx 
 
@@ -53,34 +52,42 @@ def clean_text(text):
         print(f"Error while processing the text: {e}")
     
 def main():
-    input_json = json.load(sys.stdin)
-    resume_base64 = input_json['resumeBase64']
-    jd_text = input_json['jdText']
+    data = json.load(sys.stdin)
+    jd_text = data['jdText']
+    resumes = data['resumes']
     
-    resume_bytes = base64.b64decode(resume_base64)
-    
-    try:
-        resume_text = extract_text_from_pdf(resume_bytes)
-        if not resume_text.strip():
-            raise ValueError("Empty pdf text")
+    results = []
         
-    except Exception:
+    for resume in resumes:
+        resume_bytes = base64.b64decode(resume['resumeBase64'])
         try:
-            resume_text = extract_text_from_docx(resume_bytes)
+            resume_text = extract_text_from_pdf(resume_bytes)
             if not resume_text.strip():
-                raise ValueError("Empty DOCX text")
+                raise ValueError("Empty pdf text")
+            
         except Exception:
-            resume_text = resume_bytes.decode('utf-8', errors='ignore')
+            try:
+                resume_text = extract_text_from_docx(resume_bytes)
+                if not resume_text.strip():
+                    raise ValueError("Empty DOCX text")
+            except Exception:
+                resume_text = resume_bytes.decode('utf-8', errors='ignore')
+        
+        resume_text = clean_text(resume_text)
+        jd_text = clean_text(jd_text)
+        
+        word_vectorizer = TfidfVectorizer(max_features=750, stop_words='english')
     
-    resume_text = clean_text(resume_text)
-    jd_text = clean_text(jd_text)
-    
-    word_vectorizer = TfidfVectorizer(max_features=750, stop_words='english')
-    
-    combined_vectors = word_vectorizer.fit_transform([resume_text, jd_text])
-    score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
-    
-    print(score)
+        combined_vectors = word_vectorizer.fit_transform([resume_text, jd_text])
+        score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
+        
+        results.append({
+            'similarityScore': round(score * 100, 2),
+        })
+        
+        # similarity_scores.append(score)
+        
+    print(json.dumps(results))
     
 if __name__ == "__main__":
     main()

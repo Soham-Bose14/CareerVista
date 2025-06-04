@@ -12,10 +12,10 @@ import {
     Button,
 } from "@chakra-ui/react";
 
-import Company from "../users/companyLogin";
-import UploadResume from "../users/jobSeekerLogin";
+import CompanyLogin from "../users/companyLogin";
+import CompanySignUp from "../users/companySignUp";
 
-const Home = () => {
+const Company = () => {
     const history = useHistory();
     
     const compareResumeToJD = async() => {
@@ -62,7 +62,7 @@ const Home = () => {
         }
     };
 
-    return <Container maxW='xl' centerContent
+  return <Container maxW='xl' centerContent
     bgImage={`url(${bgImage})`}
     bgSize="cover"
     bgPos="center"
@@ -82,26 +82,22 @@ const Home = () => {
         <Box bg="orange" w="50%" p={4} borderRadius="lg" color="black" borderWidth="1px">
             <Tabs variant="soft-rounded" colorScheme="red">
                 <TabList mb="1em">
-                    <Tab width="50%">Company</Tab>
-                    <Tab width="50%">Find Jobs</Tab>
+                    <Tab width="50%">Login</Tab>
+                    <Tab width="50%">Sign Up</Tab>
                 </TabList>
                 <TabPanels>
                     <TabPanel>
-                        <Company />
+                        <CompanyLogin />
                     </TabPanel>
                     <TabPanel>
-                        <UploadResume />
+                        <CompanySignUp />
                     </TabPanel>
                 </TabPanels>
 
             </Tabs>
-                <input type="text" id="search_id" placeholder="Enter Company ID" />
-            <Button colorScheme="teal" onClick={compareResumeToJD}>
-                Find Similarity
-            </Button>
         </Box>
 
     </Container>
 };
 
-export default Home;
+export default Company;

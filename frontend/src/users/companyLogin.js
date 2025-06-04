@@ -5,30 +5,31 @@ import { Input } from "@chakra-ui/react";
 import { InputGroup } from "@chakra-ui/react";
 import { Button } from "@chakra-ui/react";
 import { useToast } from "@chakra-ui/react";
+import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import axios from "axios";
 
 // import { useHistory } from "react-router-dom";
 
-const Company = () => {
-    const [companyID, setCompanyID] = useState();
-    const [companyName, setCompanyName] = useState();
-    const [jobDescription, setJobDescription] = useState();
+const CompanyLogin = () => {
+    const history = useHistory();
+
+    const [companyEmail, setCompanyEmail] = useState();
+    const [companyPassword, setCompanyPassword] = useState();
+    
     const [loading, setLoading] = useState();
 
     const toast = useToast();
-    // const history = useHistory();
 
     const submitHandler = async() => {
 
         const formData = new FormData();
 
-        formData.append("companyID", companyID);
-        formData.append("companyName", companyName);
-        formData.append("jobDescription", jobDescription);
+        formData.append("companyEmail", companyEmail);
+        formData.append("companyPassword", companyPassword);
 
-        if(!companyID || !companyName || !jobDescription){
+        if(!companyEmail || !companyPassword){
             toast({
-                title: "Please fill all the details.",
+                title: "Please enter both the email and the password.",
                 status: "warning",
                 duration: 4000,
                 isClosable: true,
@@ -42,17 +43,27 @@ const Company = () => {
                     "Content-type": "application/json",
                 },
             };
-            const { data } = await axios.post("http://localhost:4000/uploadJobDescription", formData, config);
+            const { data } = await axios.post("http://localhost:4000/companyAuthentication", formData, config);
+
+            console.log("Data during login: ", data);
+            localStorage.setItem("companyID", data.companyID);
+            localStorage.setItem("companyName", data.companyName);
+            localStorage.setItem("companyEmail", data.companyEmail);
 
             toast({
-                title: "Registration Successful",
+                title: "Successfully logged in",
                 status: "success",
                 duration: 4000,
                 isClosable: true,
                 position: "bottom",
             });
-            localStorage.setItem("companyInfo", JSON.stringify(data));
+
             setLoading(false);
+
+            history.push({
+                pathname: "/company/options",
+            });
+
 
         }catch(error){
             toast({
@@ -67,30 +78,22 @@ const Company = () => {
         }
     };
     return(<VStack spacing="3px">
-            <FormControl id='company_id' isRequired>
-                <FormLabel>Company ID:</FormLabel>
-                <Input placeholder = "Enter your company's id" onChange={(e)=>setCompanyID(e.target.value)} />
+            <FormControl id='company_login_email' isRequired>
+                <FormLabel>Company Email:</FormLabel>
+                <Input placeholder = "Enter your company's email" value={companyEmail} onChange={(e)=>setCompanyEmail(e.target.value)} />
             </FormControl>
     
-            <FormControl id='company_name' isRequired>
-                <FormLabel>Company Name:</FormLabel>
-                <Input placeholder = "Enter your company's name" value={companyName} onChange={(e)=>setCompanyName(e.target.value)} />
+            <FormControl id='company_login_password' isRequired>
+                <FormLabel>Password:</FormLabel>
+                <Input placeholder = "Enter password" value={companyPassword} onChange={(e)=>setCompanyPassword(e.target.value)} />
             </FormControl>
 
-            <FormControl id='jd' isRequired>
-                <FormLabel>Job Description:</FormLabel>
-                <Input placeholder = "Enter job description" value={jobDescription} onChange={(e)=>setJobDescription(e.target.value)} />
-            </FormControl>
-    
-            
-    
             <Button colorScheme="red" color="red" width="50%" style={{ marginTop:15 }} onClick={submitHandler} isLoading={loading}>
-                Submit
+                Sign In
             </Button>
-            
             
         </VStack>
     )  
 };
 
-export default Company;
+export default CompanyLogin;

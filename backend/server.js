@@ -4,12 +4,16 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const { GridFSBucket } = require('mongodb');
 const Resume = require('./Models/resumeModel');
-const jdModel = require('./Models/jobDescriptionModel');
+const Jobs = require('./Models/jobModel');
+const Company = require('./Models/companyModel');
+const JobSeeker = require('./Models/jobSeekerModel');
+const JobApplication = require('./Models/jobApplicationModel');
 const { Readable } = require('stream');
 const connectDB = require('./config/database');
 const fileUpload = require('express-fileupload');
 const { spawn } = require('child_process');
 const { ObjectId } = require('mongodb');
+
 
 dotenv.config();
 connectDB();
@@ -92,22 +96,24 @@ app.post('/uploadResume', async (req, res) => {
     }
 });
 
-app.post('/uploadJobDescription', async (req, res) => {
+app.post('/uploadCompanyDetails', async (req, res) => {
     try{
-        const { companyID, companyName, jobDescription } = req.body;
+        const { companyID, companyName, companyEmail, companyPassword, address } = req.body;
 
-        if(!companyID || !companyName || !jobDescription){
-            return res.status(400).json({ message: 'Missing required fields!'});
+        if(!companyID || !companyName || !companyEmail || !companyPassword || !address){
+            return res.status(400).json({ message: 'Missing one or more required fields!'});
         }
-        const newJD = await jdModel.create({
+        const newCompany = await Company.create({
             companyID,
             companyName,
-            jobDescription
+            companyEmail,
+            companyPassword,
+            address,
         });
         
         res.status(201).json({
-            message: 'Job Description uploaded successfully',
-            data: newJD
+            message: 'Your company is added successfully',
+            data: newCompany
         });
 
     }catch(error){
@@ -118,46 +124,151 @@ app.post('/uploadJobDescription', async (req, res) => {
 
 app.post('/compareResumeToJD', async(req, res) => {
     try{
-        const { resumeFileID } = req.body;
-        if(!resumeFileID) return res.status(400).json({ message: 'Resume file ID is required' });
+        const { companyID, jobID } = req.body;
+        console.log(`Received company ID: ${companyID}, job ID: ${jobID}`);
 
-        const resumeBuffer = await getFileBufferFromGridFS(resumeFileID);
-        const resumeBase64 = resumeBuffer.toString('base64');
+        const job = await Jobs.findOne({ jobID }).exec();
+        const jdText = jd.jobDescription;
 
-        const latestJD = await jdModel.findOne().sort({ createdAt: -1 }).exec();
+        const candidates = await JobApplication.findOne({ jobID }).exec();
 
-        if(!latestJD) return res.status(404).json({ message: 'No job description found' });
+        if(!candidates) return res.status(404).json({ message: 'No candidates found' });
 
-        const jdText = latestJD.jobDescription;
+        let candidateList = [];
+
+        for(id of candidates.jobSeekerId){
+            const candidate = await JobSeeker.findOne({ id }).exec();
+            candidateList.push(candidate);
+        }
+
+        console.log("Found JD:", jdText);
+
+        const resumes = await Resume.find({
+            jobSeekerId: { $in: candidateList }
+        });
+
+        if(!resumes.length){
+            return res.status(404).json({ message: 'No resumes found' });
+        }
+
+        const resumeData = [];
+
+        for(const resume of resumes){
+            try{
+                const buffer = await getFileBufferFromGridFS(resume.fileId);
+
+                resumeData.push({
+                    resumeBase64: buffer.toString('base64'),
+                });
+            }catch (err) {
+                console.error(`Error retrieving file for resume ID ${resume._id}:`, err);
+            }
+        }
 
         const pythonProcess = spawn('python', ['compute_similarity.py']);
 
         const payLoad = JSON.stringify({
-            resumeBase64,
-            jdText,
+            'jdText': jdText,
+            'resumes': resumeData,
         });
 
         pythonProcess.stdin.write(payLoad);
         pythonProcess.stdin.end();
 
+        let output = '';
+
         pythonProcess.stdout.on('data', (data) => {
-            const similarityScore = parseFloat(data.toString().trim());
-
-            if(isNaN(similarityScore)){
-                return res.status(500).json({ message: 'Invalid similarity score from python script' });
-            }
-
-            res.json({ similarityScore });
+            output += data.toString();
         });
 
         pythonProcess.stderr.on('data', (data) => {
             console.error('Python error:', data.toString());
         });
 
+        pythonProcess.on('close', (code) => {
+            try{
+                const results = JSON.parse(output);
+                results.sort((a,b) => b.similarityScore - a.similarityScore);
+                res.json({ results });
+            }catch(err){
+                console.error('Failed to parse Python output: ', err);
+                res.status(500).json({ message: 'Invalid output from Python script' });
+            }
+        });
+
     }
     catch(error){
         console.error('Error:', error);
         res.status(500).json({ message: 'Server error' });
+    }
+});
+
+app.post('/companyAuthentication', async(req, res) => {
+    try{
+        const { companyEmail, companyPassword } = req.body;
+
+        console.log(`Received company email: ${companyEmail}, company password: ${companyPassword}`);
+
+        const company = await Company.findOne({ companyEmail }).exec();
+
+        if(company.companyPassword === companyPassword){
+            console.log("Successfully logged in.");
+            res.json({
+                companyID: company.companyID,
+                companyName: company.companyName,
+                companyEmail: company.companyEmail,
+            });
+        }
+        else{
+            throw new error("Wrong email or password. Try again.");
+        }
+    }catch(error){
+        console.log("Error during company authentication: ", error);
+    }
+});
+
+app.get('/company/viewJobs', async(req, res) => {
+    const { companyID, companyName, companyEmail } = req.body;
+
+    try{
+        const jobs = await Jobs.find({
+            companyID: { $eq: companyID }
+        });
+
+        // const results = JSON.stringify(jobs);
+
+        res.status(201).json(results);
+    }catch(error){
+        console.log("Error viewing jobs: ", error);
+    }
+
+});
+
+app.post('/company/addJob', async(req, res) => {
+    try{
+        const { jobID, jobDescription, companyID } = req.body;
+
+        console.log(`Job ID received: ${jobID}`);
+        console.log(`Job description received: ${jobDescription}`);
+        console.log(`Company ID received: ${companyID}`);
+
+        if(!jobID || !jobDescription || !companyID){
+            return res.status(400).json({ message: 'Missing one or more required fields!'});
+        }
+        const newJob = await Jobs.create({
+            jobID,
+            companyID,
+            jobDescription,
+        });
+        
+        res.status(201).json({
+            message: 'Your company is added successfully',
+            data: newJob
+        });
+
+    }catch(error){
+        console.error('Error uploading job description: ', error);
+        res.status(500).json({ message: 'Server error while uploading job description'});
     }
 });
 
