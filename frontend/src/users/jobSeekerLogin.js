@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useHistory } from "react-router-dom/cjs/react-router-dom.min";
 import {
   Box,
   Input,
@@ -11,39 +12,40 @@ import {
 import axios from "axios";
 
 
-const UploadResume = () => {
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [file, setFile] = useState(null);
+const JobSeekerLogin = () => {
+  const history = useHistory();
+  
+  const [userName, setUserName] = useState("");
+  const [jobSeekerPassword, setJobSeekerPassword] = useState("");
+  
   const toast = useToast(); 
-
-  const handleChange = (event) => {
-    const uploadedFile = event.target.files[0]; 
-    setFile(uploadedFile);
-    console.log("File uploaded:", uploadedFile);
-  };
 
   const handleSubmit = async () => {
     const formData = new FormData();
 
-    formData.append("myFile", file);
-    formData.append("name", name);
-    formData.append("email", email);
+    formData.append("userName", userName);
+    formData.append("jobSeekerPassword", jobSeekerPassword);
+
+    const config = {
+        headers: { "Content-type": "application/json" },
+      };
 
     try {
-      await axios.post("http://localhost:4000/uploadResume", formData);
+      await axios.post("http://localhost:4000/jobSeekerAuthentication", formData, config);
       toast({
-        title: "Resume uploaded successfully",
+        title: "Logged in successfully.",
         status: "success",
         duration: 3000,
         isClosable: true,
       });
-      setEmail("");
-      setName("");
-      setFile(null);
+
+      history.push({
+        pathname: '/jobSeeker/options'
+      });
+      
     } catch (error) {
       toast({
-        title: "Upload failed",
+        title: "Login failed.",
         description: error.response?.data?.message || "Try again.",
         status: "error",
         duration: 3000,
@@ -52,53 +54,34 @@ const UploadResume = () => {
     }
   };
 
-  const findSimilarity = async() => {
-
-  };
-
-
   return (
     <Box maxW="md" mx="auto" mt={10} p={6} borderWidth="1px" borderRadius="lg">
       <FormControl mb={4} isRequired>
-        <FormLabel>Name</FormLabel>
+        <FormLabel>Username</FormLabel>
         <Input
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          placeholder="Enter your username"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
         />
       </FormControl>
 
       <FormControl mb={4} isRequired>
-        <FormLabel>Email</FormLabel>
+        <FormLabel>Password</FormLabel>
         <Input
-          type="email"
-          placeholder="Enter your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="password"
+          placeholder="Enter your password"
+          value={jobSeekerPassword}
+          onChange={(e) => setJobSeekerPassword(e.target.value)}
         />
       </FormControl>
-
-      <FormControl mb={4} isRequired>
-        <FormLabel>Upload PDF or Word Document</FormLabel>
-        <Input
-          type="file"
-          accept=".pdf,.doc,.docx, .txt"
-          onChange={handleChange}
-          p={1}
-        />
-      </FormControl>
-
-      {file && (
-        <Text mb={4}>
-          Selected file: <strong>{file.name}</strong>
-        </Text>
-      )}
-
-      <Button colorScheme="teal" isDisabled={!file || !name || !email} onClick={handleSubmit}>
-        Submit
+      <Button
+        colorScheme="teal"
+        onClick={handleSubmit}
+      >
+        Sign In
       </Button>
     </Box>
   );
 };
 
-export default UploadResume;
+export default JobSeekerLogin;

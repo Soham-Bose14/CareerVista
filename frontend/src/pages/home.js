@@ -4,63 +4,26 @@ import bgImage from "../bgImage.jpg"
 import {
     Container,
     Box,
-    Tab,
-    TabList,
-    TabPanel,
-    TabPanels,
-    Tabs,
     Button,
 } from "@chakra-ui/react";
 
-import Company from "../users/companyLogin";
-import UploadResume from "../users/jobSeekerLogin";
 
 const Home = () => {
     const history = useHistory();
-    
-    const compareResumeToJD = async() => {
-        let companyID;
-        try{companyID = document.getElementById("search_id").value;//.trim();
-        }catch(err){
-            console.error("Couldn't send companyID to the server.")
-        }
 
-        try{
-            console.log(`Sending companyID to server: ${companyID}`);
-
-            const response = await fetch('http://localhost:4000/compareResumeToJD', {
-                method: 'POST',
-                headers: {
-                    'Content-type': 'application/json',
-                },
-                body: JSON.stringify({ companyID }),
-            });
-
-            console.log("HTTP status:", response.status);
-
-            if(!response.ok){
-                const errorText = await response.text();
-                console.error("Server responded with:", errorText);
-                throw new Error('Failed to fetch similarity score');
-            }
-            const data = await response.json();
-            const results = data.results;
-
-            alert(`Similarity scores calculated `);
-
-            console.log("Matching job profiles: ", results);
-
-            history.push({
-                pathname: "/results",
-                state: { results: results }
-            });
-
-        }
-        catch(error){
-            console.error('Error comparing resume:', error);
-            alert('An error occurred while comparing the resume');
-        }
+    const GoToCompany = async() => {
+        history.push({
+            pathname: '/company'
+        });
     };
+
+    const GoToJobSeeker = async() => {
+        history.push({
+            pathname: '/jobSeeker'
+        });
+    };
+    
+    
 
     return <Container maxW='xl' centerContent
     bgImage={`url(${bgImage})`}
@@ -80,24 +43,11 @@ const Home = () => {
         <h2 fontSize='7xl' fontFamily='Work sans' color='green.600'>Career Vista: A Deep Insight Into Your Resume</h2>
         </Box>
         <Box bg="orange" w="50%" p={4} borderRadius="lg" color="black" borderWidth="1px">
-            <Tabs variant="soft-rounded" colorScheme="red">
-                <TabList mb="1em">
-                    <Tab width="50%">Company</Tab>
-                    <Tab width="50%">Find Jobs</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <Company />
-                    </TabPanel>
-                    <TabPanel>
-                        <UploadResume />
-                    </TabPanel>
-                </TabPanels>
-
-            </Tabs>
-                <input type="text" id="search_id" placeholder="Enter Company ID" />
-            <Button colorScheme="teal" onClick={compareResumeToJD}>
-                Find Similarity
+            <Button colorScheme="red" color="yellow" width="50%" style={{ marginTop:15 }} onClick={GoToCompany}>
+                Company
+            </Button>
+            <Button colorScheme="red" color="yellow" width="50%" style={{ marginTop:15 }} onClick={GoToJobSeeker}>
+                Job Seeker
             </Button>
         </Box>
 

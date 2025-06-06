@@ -51,50 +51,105 @@ const getFileBufferFromGridFS = async(fileID) => {
     });
 };
 
-app.post('/uploadResume', async (req, res) => {
-    try {
-        const { email, name } = req.body;
+app.post('/jobSeekerSignUp', async (req, res) => {
+  try {
+    const {
+      jobSeekerID,
+      userName,
+      jobSeekerName,
+      jobSeekerEmail,
+      jobSeekerPassword,
+      resumeID
+    } = req.body;
 
-        if (!email || !name || !req.files?.myFile) {
-            return res.status(400).json({ message: 'Missing required fields' });
-        }
-
-        const file = req.files.myFile;
-
-        const readableStream = new Readable();
-        readableStream.push(file.data);
-        readableStream.push(null); // Signals end of stream
-
-        const uploadStream = gfsBucket.openUploadStream(file.name, {
-            contentType: file.mimetype,
-            metadata: { uploadedBy: email }
-        });
-
-        readableStream.pipe(uploadStream);
-
-        uploadStream.on('finish', async () => {
-            const newResume = await Resume.create({
-                email,
-                name,
-                fileId: uploadStream.id
-            });
-
-            res.status(201).json({
-                message: 'Resume uploaded successfully',
-                resume: newResume
-            });
-        });
-
-        uploadStream.on('error', (err) => {
-            console.error('Stream error:', err);
-            res.status(500).json({ message: 'File upload failed' });
-        });
-
-    } catch (err) {
-        console.error('Upload Error:', err);
-        res.status(500).json({ message: 'Server error' });
+    // ✅ Check for required fields
+    if (!jobSeekerID || !userName || !jobSeekerName || !jobSeekerEmail || !jobSeekerPassword || !resumeID || !req.files || !req.files.myFile) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
+
+    const file = req.files.myFile;
+
+    // ✅ Create job seeker record first
+    const newJobSeeker = await JobSeeker.create({
+        id: jobSeekerID,
+        username: userName,
+        name: jobSeekerName,
+        email: jobSeekerEmail,
+        password: jobSeekerPassword,
+    });
+
+
+    // ✅ Upload resume to GridFS
+    const readableStream = new Readable();
+    readableStream.push(file.data);
+    readableStream.push(null); // End of stream
+
+    const uploadStream = gfsBucket.openUploadStream(file.name, {
+      contentType: file.mimetype,
+      metadata: { uploadedBy: jobSeekerEmail }
+    });
+
+    readableStream.pipe(uploadStream);
+
+    uploadStream.on('finish', async () => {
+      // ✅ Store metadata in Resume collection
+    const newResume = await Resume.create({
+        resumeId: resumeID,
+        jobSeekerId: jobSeekerID,
+        fileId: uploadStream.id
+    });
+
+
+      res.status(201).json({
+        message: 'Job Seeker and Resume uploaded successfully',
+        resume: newResume
+      });
+    });
+
+    uploadStream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.status(500).json({ message: 'File upload failed' });
+    });
+
+  } catch (err) {
+    console.error('Upload Error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
+
+app.post('/jobSeekerAuthentication', async (req, res) => { 
+  try {
+    const { userName, jobSeekerPassword } = req.body;
+
+    if (!userName || !jobSeekerPassword) {
+      return res.status(400).json({ message: 'Missing one or more required fields!' });
+    }
+
+    const user = await JobSeeker.findOne({ username: userName }).exec();
+
+    if (!user) {
+      return res.status(401).json({ message: 'User not found.' });
+    }
+
+    if (user.password === jobSeekerPassword) {
+      console.log("Successfully logged in.");
+      res.json({
+        jobSeekerID: user.id,
+        userName: user.username,
+        jobSeekerName: user.name,
+        jobSeekerEmail: user.email,
+        jobSeekerPassword: user.password,
+      });
+    } else {
+      throw new Error("Wrong email or password. Try again.");
+    }
+
+  } catch (error) {
+    console.log("Error during user authentication: ", error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+});
+
 
 app.post('/uploadCompanyDetails', async (req, res) => {
     try{
@@ -122,21 +177,23 @@ app.post('/uploadCompanyDetails', async (req, res) => {
     }
 });
 
-app.post('/compareResumeToJD', async(req, res) => {
+app.post('/company/searchCandidates', async(req, res) => {
     try{
         const { companyID, jobID } = req.body;
         console.log(`Received company ID: ${companyID}, job ID: ${jobID}`);
 
         const job = await Jobs.findOne({ jobID }).exec();
-        const jdText = jd.jobDescription;
+        const jdText = job.jobDescription;
 
-        const candidates = await JobApplication.findOne({ jobID }).exec();
+        console.log(`Received job description: ${jdText}`);
 
-        if(!candidates) return res.status(404).json({ message: 'No candidates found' });
+        const result = await JobApplication.findOne({ jobID }).exec();
+
+        if(!result) return res.status(404).json({ message: "This job doesn't exist" });
 
         let candidateList = [];
 
-        for(id of candidates.jobSeekerId){
+        for(id of result.jobSeekerId){
             const candidate = await JobSeeker.findOne({ id }).exec();
             candidateList.push(candidate);
         }
@@ -227,7 +284,7 @@ app.post('/companyAuthentication', async(req, res) => {
     }
 });
 
-app.get('/company/viewJobs', async(req, res) => {
+app.post('/company/viewJobs', async(req, res) => {
     const { companyID, companyName, companyEmail } = req.body;
 
     try{
@@ -237,7 +294,7 @@ app.get('/company/viewJobs', async(req, res) => {
 
         // const results = JSON.stringify(jobs);
 
-        res.status(201).json(results);
+        res.status(201).json(jobs);
     }catch(error){
         console.log("Error viewing jobs: ", error);
     }
@@ -270,6 +327,21 @@ app.post('/company/addJob', async(req, res) => {
         console.error('Error uploading job description: ', error);
         res.status(500).json({ message: 'Server error while uploading job description'});
     }
+});
+
+app.post('/company/editJob', async(req, res) => {
+    const { jobID, jobDescription } = req.body;
+
+    try{
+        await Jobs.updateOne(
+            { jobID: jobID },
+            { $set: { jobDescription: jobDescription } },
+        );
+        console.log("Job description updated successfully.")
+    }catch(error){
+        console.error(`Error while editing job description: ${error}`);
+    }
+
 });
 
 app.get("/", (req, res) => res.send("Welcome to CareerVista."));
