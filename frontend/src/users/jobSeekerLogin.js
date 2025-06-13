@@ -21,17 +21,24 @@ const JobSeekerLogin = () => {
   const toast = useToast(); 
 
   const handleSubmit = async () => {
-    const formData = new FormData();
-
-    formData.append("userName", userName);
-    formData.append("jobSeekerPassword", jobSeekerPassword);
+    const payload = {
+      userName,
+      jobSeekerPassword,
+    };
 
     const config = {
-        headers: { "Content-type": "application/json" },
-      };
+      headers: { "Content-type": "application/json" },
+    };
 
     try {
-      await axios.post("http://localhost:4000/jobSeekerAuthentication", formData, config);
+      const { data } = await axios.post("http://localhost:4000/jobSeeker/Authentication", payload, config);
+
+      // ✅ Store jobSeeker details in localStorage
+      localStorage.setItem("jobSeekerID", data.jobSeekerID);
+      localStorage.setItem("userName", data.userName);
+      localStorage.setItem("jobSeekerName", data.jobSeekerName);
+      localStorage.setItem("jobSeekerEmail", data.jobSeekerEmail);
+
       toast({
         title: "Logged in successfully.",
         status: "success",
@@ -40,9 +47,8 @@ const JobSeekerLogin = () => {
       });
 
       history.push({
-        pathname: '/jobSeeker/options'
+        pathname: '/jobSeeker/options',
       });
-      
     } catch (error) {
       toast({
         title: "Login failed.",
@@ -53,6 +59,7 @@ const JobSeekerLogin = () => {
       });
     }
   };
+
 
   return (
     <Box maxW="md" mx="auto" mt={10} p={6} borderWidth="1px" borderRadius="lg">

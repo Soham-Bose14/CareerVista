@@ -13,6 +13,7 @@ const connectDB = require('./config/database');
 const fileUpload = require('express-fileupload');
 const { spawn } = require('child_process');
 const { ObjectId } = require('mongodb');
+const nodemailer = require('nodemailer');
 
 
 dotenv.config();
@@ -117,7 +118,7 @@ app.post('/jobSeekerSignUp', async (req, res) => {
   }
 });
 
-app.post('/jobSeekerAuthentication', async (req, res) => { 
+app.post('/jobSeeker/Authentication', async (req, res) => { 
   try {
     const { userName, jobSeekerPassword } = req.body;
 
@@ -177,59 +178,69 @@ app.post('/uploadCompanyDetails', async (req, res) => {
     }
 });
 
-app.post('/company/searchCandidates', async(req, res) => {
-    try{
+app.post('/company/searchCandidates', async (req, res) => {
+    try {
         const { companyID, jobID } = req.body;
         console.log(`Received company ID: ${companyID}, job ID: ${jobID}`);
 
         const job = await Jobs.findOne({ jobID }).exec();
+        if (!job) return res.status(404).json({ message: "Job not found" });
+
         const jdText = job.jobDescription;
 
-        console.log(`Received job description: ${jdText}`);
-
         const result = await JobApplication.findOne({ jobID }).exec();
+        if (!result) return res.status(404).json({ message: "This job doesn't exist" });
 
-        if(!result) return res.status(404).json({ message: "This job doesn't exist" });
+        const fullCandidateData = [];
 
-        let candidateList = [];
+        for (const id of result.jobSeekerID) {
+            const candidate = await JobSeeker.findOne({ id }, {
+                _id: 0,
+                id: 1,
+                username: 1,
+                name: 1,
+                email: 1,
+            }).lean();
 
-        for(id of result.jobSeekerId){
-            const candidate = await JobSeeker.findOne({ id }).exec();
-            candidateList.push(candidate);
-        }
+            const resumeEntry = await Resume.findOne({ jobSeekerId: id }, {
+                _id: 0,
+                resumeId: 1,
+                fileId: 1,
+            }).lean();
 
-        console.log("Found JD:", jdText);
+            let resumeBase64 = null;
 
-        const resumes = await Resume.find({
-            jobSeekerId: { $in: candidateList }
-        });
-
-        if(!resumes.length){
-            return res.status(404).json({ message: 'No resumes found' });
-        }
-
-        const resumeData = [];
-
-        for(const resume of resumes){
-            try{
-                const buffer = await getFileBufferFromGridFS(resume.fileId);
-
-                resumeData.push({
-                    resumeBase64: buffer.toString('base64'),
-                });
-            }catch (err) {
-                console.error(`Error retrieving file for resume ID ${resume._id}:`, err);
+            try {
+                if (resumeEntry?.fileId) {
+                    const buffer = await getFileBufferFromGridFS(resumeEntry.fileId);
+                    resumeBase64 = buffer.toString('base64');
+                }
+            } catch (err) {
+                console.error(`Error retrieving resume for jobSeeker ${id}:`, err.message);
             }
+
+            fullCandidateData.push({
+                id: candidate?.id,
+                username: candidate?.username,
+                name: candidate?.name,
+                email: candidate?.email,
+                resumeId: resumeEntry?.resumeId || null,
+                fileId: resumeEntry?.fileId || null,
+                resumeBase64, // this will go to Python and be returned with similarity
+            });
         }
+
+        // Create data to send to Python
+        const pythonPayload = {
+            jdText,
+            resumes: fullCandidateData.map(c => ({
+                id: c.id,
+                resumeBase64: c.resumeBase64 || ''
+            })),
+        };
 
         const pythonProcess = spawn('python', ['compute_similarity.py']);
-
-        const payLoad = JSON.stringify({
-            'jdText': jdText,
-            'resumes': resumeData,
-        });
-
-        pythonProcess.stdin.write(payLoad);
+        pythonProcess.stdin.write(JSON.stringify(pythonPayload));
         pythonProcess.stdin.end();
 
         let output = '';
@@ -243,22 +254,36 @@ app.post('/company/searchCandidates', async(req, res) => {
         });
 
         pythonProcess.on('close', (code) => {
-            try{
-                const results = JSON.parse(output);
-                results.sort((a,b) => b.similarityScore - a.similarityScore);
-                res.json({ results });
-            }catch(err){
-                console.error('Failed to parse Python output: ', err);
+            try {
+                const similarityResults = JSON.parse(output); // [{ id, similarityScore }, ...]
+
+                // Merge similarity into fullCandidateData
+                const enrichedCandidates = fullCandidateData.map(candidate => {
+                    const scoreEntry = similarityResults.find(s => s.id === candidate.id);
+                    return {
+                        ...candidate,
+                        similarityScore: scoreEntry?.similarityScore || 0
+                    };
+                });
+
+                // Sort by similarityScore DESC
+                enrichedCandidates.sort((a, b) => b.similarityScore - a.similarityScore);
+
+                console.log(`Sending matching job profiles to frontend: `, enrichedCandidates);
+
+                res.json(enrichedCandidates);
+            } catch (err) {
+                console.error('Failed to parse Python output:', err.message);
                 res.status(500).json({ message: 'Invalid output from Python script' });
             }
         });
 
-    }
-    catch(error){
-        console.error('Error:', error);
+    } catch (error) {
+        console.error('Error:', error.message);
         res.status(500).json({ message: 'Server error' });
     }
 });
+
 
 app.post('/companyAuthentication', async(req, res) => {
     try{
@@ -342,6 +367,229 @@ app.post('/company/editJob', async(req, res) => {
         console.error(`Error while editing job description: ${error}`);
     }
 
+});
+
+// Route: Get job and company details
+// GET /jobSeeker/viewApplications?jobSeekerID=1
+app.get('/jobSeeker/viewApplications', async (req, res) => {
+  try {
+    let { jobSeekerID } = req.query;
+
+    console.log("JobSeekerID received by server: ", jobSeekerID);
+
+    if (!jobSeekerID) {
+      return res.status(400).json({ message: 'Missing jobSeekerID in query params' });
+    }
+
+    jobSeekerID = jobSeekerID.toString();
+
+    const applications = await JobApplication.aggregate([
+      {
+        $match: {
+          jobSeekerID: { $in: [jobSeekerID] }
+        }
+      },
+      {
+        $lookup: {
+          from: "jobs",
+          localField: "jobID",
+          foreignField: "jobID",
+          as: "jobDetails"
+        }
+      },
+      { $unwind: "$jobDetails" },
+
+      // OPTIONAL: Convert to string in case of type mismatch
+      {
+        $addFields: {
+          "jobDetails.companyID": { $toString: "$jobDetails.companyID" }
+        }
+      },
+
+      {
+        $lookup: {
+          from: "company",
+          localField: "jobDetails.companyID",
+          foreignField: "companyID",
+          as: "companyDetails"
+        }
+      },
+      { $unwind: { path: "$companyDetails", preserveNullAndEmptyArrays: false } },
+
+      {
+        $project: {
+          _id: 0,
+          jobID: 1,
+          companyID: "$jobDetails.companyID",
+          jobDescription: "$jobDetails.jobDescription",
+          companyName: "$companyDetails.companyName"
+        }
+      }
+    ]);
+
+
+    console.log("✅ Final filtered applications for jobSeekerID:", jobSeekerID, applications);
+
+    return res.json(applications);
+  } catch (err) {
+    console.error('❌ Final error fetching applications:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+app.delete('/jobSeeker/deleteApplication', async (req, res) => {
+  try {
+    const { jobID, jobSeekerID } = req.body;
+
+    if (!jobID || !jobSeekerID) {
+      return res.status(400).json({ message: 'Missing jobID or jobSeekerID' });
+    }
+
+    const result = await JobApplication.updateOne(
+      { jobID },
+      { $pull: { jobSeekerID: jobSeekerID } }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    res.status(200).json({ message: 'Job application removed for jobSeekerID' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.get('/jobSeeker/viewJobs', async (req, res) => {
+    
+    try{
+
+        const results = await Jobs.aggregate([
+            {
+                $lookup: {
+                    from: "company",         // the collection to join (check your actual name)
+                    localField: "companyID",   // field from Jobs
+                    foreignField: "companyID", // field from Company
+                    as: "companyDetails"
+                }
+            },
+            {
+                $unwind: "$companyDetails" // to flatten the array from lookup
+            },
+            {
+                $project: {
+                    _id: 0,
+                    jobID: 1,
+                    companyID: 1,
+                    jobDescription: 1,
+                    tags: 1,
+                    companyName: "$companyDetails.companyName"
+                }
+            }
+        ]);
+        if(results.length === 0){
+            return res.status(200).json({ message: "No jobs available." });
+        }
+        console.log("Jobs being returned to frontend:", results);
+
+        res.status(200).json(results);
+
+    }catch(error){
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+
+});
+
+app.post('/jobSeeker/addApplication', async (req, res) => {
+  try {
+    let { jobID, jobSeekerID } = req.body;
+
+    console.log("📥 Incoming addApplication request:", { jobID, jobSeekerID });
+
+    jobID = typeof jobID === 'string' ? jobID.trim() : null;
+    jobSeekerID = typeof jobSeekerID === 'string' ? jobSeekerID.trim() : null;
+
+    if (!jobID || jobID === "null" || jobID === "undefined" || !jobSeekerID) {
+      console.warn("❌ Invalid input received on server:", { jobID, jobSeekerID });
+      return res.status(400).json({ message: 'Missing or invalid jobID or jobSeekerID' });
+    }
+
+    const application = await JobApplication.findOne({ jobID });
+
+    if (!application) {
+      await JobApplication.create({ jobID, jobSeekerID: [jobSeekerID] });
+      return res.status(200).json({ message: 'JobSeekerID added successfully' });
+    }
+
+    if (application.jobSeekerID.includes(jobSeekerID)) {
+      return res.status(200).json({ message: 'JobSeekerID already present' });
+    }
+
+    application.jobSeekerID.push(jobSeekerID);
+    await application.save();
+
+    return res.status(200).json({ message: 'JobSeekerID added successfully' });
+  } catch (error) {
+    console.error("❌ Error adding JobSeekerID:", error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+app.get('/debug/applications', async (req, res) => {
+  const all = await JobApplication.find({});
+  res.json(all);
+});
+
+app.get('/jobSeeker/debug', async (req, res) => {
+  const { jobSeekerID } = req.query;
+
+  const docs = await JobApplication.find({
+    jobSeekerID: { $in: [jobSeekerID.toString()] }
+  });
+
+  console.log("🧪 Direct match for", jobSeekerID, docs);
+
+  res.json(docs);
+});
+
+app.post('/sendEmail', async (req, res) => {
+  const { to, subject, message } = req.body;
+
+  if (!to || !subject || !message) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  try {
+    // Create transporter (using Gmail in this example)
+    let transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'soham14b@gmail.com',       // 🔒 replace with your email
+        pass: 'pqqkgpubgbjkwzby'           // 🔒 use an app password if 2FA is enabled
+      }
+    });
+
+    // Email options
+    const mailOptions = {
+      from: 'soham14b@gmail.com',
+      to: to,
+      subject: subject,
+      text: message
+    };
+
+    // Send mail
+    let info = await transporter.sendMail(mailOptions);
+    console.log('Email sent:', info.response);
+
+    res.status(200).json({ message: 'Email sent successfully' });
+
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ message: 'Failed to send email', error });
+  }
 });
 
 app.get("/", (req, res) => res.send("Welcome to CareerVista."));

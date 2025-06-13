@@ -83,7 +83,7 @@ const CompanyOptions = () => {
     });
   };
 
-  const SearchCandidates = async (jobID) => {
+  const SearchCandidates = async (jobID, jobDescription) => {
     let companyID;
     try {
       companyID = localStorage.getItem("companyID"); 
@@ -93,7 +93,7 @@ const CompanyOptions = () => {
     }
 
     try {
-      console.log(`Sending companyID to server: ${companyID}, jobID: ${jobID}`);
+      console.log(`Sending companyID: ${companyID}, jobID: ${jobID} to the server.`);
 
       const response = await axios.post('http://localhost:4000/company/searchCandidates', {
         companyID,
@@ -107,15 +107,17 @@ const CompanyOptions = () => {
       console.log("HTTP status:", response.status);
 
       const data = response.data;
-      const results = data.results;
-
+      
       alert(`Similarity scores calculated`);
 
-      console.log("Matching job profiles: ", results);
+      console.log("Matching job profiles: ", data);
 
       history.push({
         pathname: "/company/candidates",
-        state: { results: results }
+        state: {
+          results: data,
+          jobDescription: jobDescription,
+        }
     });
 
   } catch (error) {
@@ -228,7 +230,7 @@ const CompanyOptions = () => {
                       <Button
                         colorScheme="blue"
                         size="sm"
-                        onClick={() => SearchCandidates(job.jobID)}
+                        onClick={() => SearchCandidates(job.jobID, job.jobDescription)}
                       >
                         Search
                       </Button>

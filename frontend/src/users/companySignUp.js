@@ -57,9 +57,9 @@ const CompanySignUp = () => {
             };
             const { data } = await axios.post("http://localhost:4000/uploadCompanyDetails", companyData, config);
 
-            localStorage.setItem("companyID", data.companyID);
-            localStorage.setItem("companyName", data.companyName);
-            localStorage.setItem("companyEmail", data.companyEmail);
+            localStorage.setItem("companyID", companyID);
+            localStorage.setItem("companyName", companyName);
+            localStorage.setItem("companyEmail", companyEmail);
 
             toast({
                 title: "Registration Successful",

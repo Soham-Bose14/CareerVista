@@ -82,6 +82,7 @@ def main():
         score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
         
         results.append({
+            'id': resume['id'],
             'similarityScore': round(score * 100, 2),
         })
         

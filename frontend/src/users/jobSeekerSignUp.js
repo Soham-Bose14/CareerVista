@@ -80,13 +80,17 @@ const JobSeekerSignUp = () => {
         position: "bottom",
       });
 
+      console.log("JobSeekerID received: ", jobSeekerID);
+
       localStorage.setItem("jobSeekerID", jobSeekerID);
       localStorage.setItem("userName", userName);
       localStorage.setItem("jobSeekerName", jobSeekerName);
       localStorage.setItem("jobSeekerEmail", jobSeekerEmail);
       localStorage.setItem("resumeID", resumeID);
 
-      history.push("/jobSeeker/options");
+      history.push({
+        pathname: "/jobSeeker/options",
+      });
     } catch (error) {
       toast({
         title: "Error Occurred!",
