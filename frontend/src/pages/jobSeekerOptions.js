@@ -20,7 +20,7 @@ const JobSeekerOptions = () => {
   const toast = useToast();
   const location = useLocation();
   const history = useHistory();
-  const [activeTab, setActiveTab] = useState("view");
+  const [activeTab, setActiveTab] = useState("");
 
   const [jobs, setJobs] = useState([]);
   const [applicationData, setApplicationData] = useState([]);
@@ -184,6 +184,13 @@ const JobSeekerOptions = () => {
     }
   };
 
+  const GoHome = () => {
+    history.push({ pathname: "/" });
+  };
+
+  const GoBack = () => {
+    history.push({ pathname: "/jobSeeker" });
+  };
 
   return (
     <Box
@@ -317,6 +324,22 @@ const JobSeekerOptions = () => {
             </Table>
           </Box>
         )}
+        <Button
+          mt={6}
+          colorScheme="pink"
+          variant="outline"
+          onClick={GoHome}
+        >
+          Home
+        </Button>
+        <Button
+          mt={6}
+          colorScheme="pink"
+          variant="outline"
+          onClick={GoBack}
+        >
+          Back
+        </Button>
       </Container>
     </Box>
   );

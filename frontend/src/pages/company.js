@@ -1,60 +1,82 @@
 import React from "react";
 import { useHistory } from 'react-router-dom';
-import bgImage from "../bgImage.jpg"
+import bgImage from "../bgImage.jpg";
 import {
-    Container,
-    Box,
-    Tab,
-    TabList,
-    TabPanel,
-    TabPanels,
-    Tabs,
-    Button,
+  Container,
+  Box,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Button,
+  Heading,
+  useBreakpointValue,
 } from "@chakra-ui/react";
 
 import CompanyLogin from "../users/companyLogin";
 import CompanySignUp from "../users/companySignUp";
 
 const Company = () => {
-    const history = useHistory();
+  const history = useHistory();
 
+  const GoHome = () => {
+    history.push({ pathname: "/" });
+  };
 
-  return <Container maxW='xl' centerContent
-    bgImage={`url(${bgImage})`}
-    bgSize="cover"
-    bgPos="center"
-    height="100vh"
+  const boxWidth = useBreakpointValue({ base: "90%", md: "60%", lg: "40%" });
+
+  return (
+    <Container
+      maxW="100vw"
+      minH="100vh"
+      centerContent
+      p={0}
+      m={0}
+      bgImage={`url(${bgImage})`}
+      bgSize="cover"
+      bgPos="center"
     >
-        <Box d="flex"
-            justifyContent="center"
-            p={3}
-            bg={"white"}
-            w="50%"
-            m="40px 0 15px 0"
-            borderRadius="lg"
-            borderWidth="1px"
+      <Box
+        bg="whiteAlpha.900"
+        p={6}
+        borderRadius="xl"
+        boxShadow="2xl"
+        mt={10}
+        w={boxWidth}
+        textAlign="center"
+      >
+        <Heading size="lg" color="teal.600" mb={4}>
+          CareerVista: A Deep Insight Into Your Resume
+        </Heading>
+
+        <Tabs variant="soft-rounded" colorScheme="teal" isFitted>
+          <TabList>
+            <Tab>Login</Tab>
+            <Tab>Sign Up</Tab>
+          </TabList>
+
+          <TabPanels>
+            <TabPanel>
+              <CompanyLogin />
+            </TabPanel>
+            <TabPanel>
+              <CompanySignUp />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+
+        <Button
+          mt={6}
+          colorScheme="pink"
+          variant="outline"
+          onClick={GoHome}
         >
-        <h2 fontSize='7xl' fontFamily='Work sans' color='green.600'>Career Vista: A Deep Insight Into Your Resume</h2>
-        </Box>
-        <Box bg="orange" w="50%" p={4} borderRadius="lg" color="black" borderWidth="1px">
-            <Tabs variant="soft-rounded" colorScheme="red">
-                <TabList mb="1em">
-                    <Tab width="50%">Login</Tab>
-                    <Tab width="50%">Sign Up</Tab>
-                </TabList>
-                <TabPanels>
-                    <TabPanel>
-                        <CompanyLogin />
-                    </TabPanel>
-                    <TabPanel>
-                        <CompanySignUp />
-                    </TabPanel>
-                </TabPanels>
-
-            </Tabs>
-        </Box>
-
+          Home
+        </Button>
+      </Box>
     </Container>
+  );
 };
 
 export default Company;

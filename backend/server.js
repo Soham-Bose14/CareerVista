@@ -239,7 +239,7 @@ app.post('/company/searchCandidates', async (req, res) => {
             })),
         };
 
-        const pythonProcess = spawn('python', ['compute_similarity.py']);
+        const pythonProcess = spawn('C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe', ['compute_similarity.py']);
         pythonProcess.stdin.write(JSON.stringify(pythonPayload));
         pythonProcess.stdin.end();
 
@@ -256,6 +256,8 @@ app.post('/company/searchCandidates', async (req, res) => {
         pythonProcess.on('close', (code) => {
             try {
                 const similarityResults = JSON.parse(output); // [{ id, similarityScore }, ...]
+                console.log('Python raw output:', output);
+
 
                 // Merge similarity into fullCandidateData
                 const enrichedCandidates = fullCandidateData.map(candidate => {

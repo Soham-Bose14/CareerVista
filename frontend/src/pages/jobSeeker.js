@@ -4,13 +4,14 @@ import bgImage from "../bgImage.jpg";
 import {
   Container,
   Box,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
   Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
   Button,
   Heading,
+  useBreakpointValue,
 } from "@chakra-ui/react";
 
 import JobSeekerLogin from "../users/jobSeekerLogin";
@@ -18,58 +19,61 @@ import JobSeekerSignUp from "../users/jobSeekerSignUp";
 
 const JobSeeker = () => {
   const history = useHistory();
+  const boxWidth = useBreakpointValue({ base: "90%", md: "60%", lg: "40%" });
+
+  const GoHome = () => {
+    history.push({ pathname: "/" });
+  };
 
   return (
     <Container
-    maxW="100vw"
-    p={0}
-    m={0}
-    bgImage={`url(${bgImage})`}
-    bgSize="cover"
-    bgPos="center"
-    minHeight="100vh"
+      maxW="100vw"
+      minH="100vh"
+      centerContent
+      p={0}
+      m={0}
+      bgImage={`url(${bgImage})`}
+      bgSize="cover"
+      bgPos="center"
     >
-    <Box
-        display="flex"
-        justifyContent="center"
-        p={3}
-        bg="white"
-        w="100%"
-        m="40px 0 15px 0"
-        borderRadius="lg"
-        borderWidth="1px"
-    >
-        <Heading fontSize="4xl" fontFamily="Work sans" color="green.600">
-        Career Vista: A Deep Insight Into Your Resume
-        </Heading>
-    </Box>
-
-    {/* 🔽 CONTAINED CENTERED SECTION */}
-    <Box
-        bg="orange"
-        w="90%"
-        maxW="800px"
-        mx="auto"
+      <Box
+        bg="whiteAlpha.900"
         p={6}
-        borderRadius="lg"
-        color="black"
-        borderWidth="1px"
-    >
-        <Tabs variant="soft-rounded" colorScheme="red">
-        <TabList mb="1em" display="flex" justifyContent="center">
-            <Tab flex={1}>Login</Tab>
-            <Tab flex={1}>Sign Up</Tab>
-        </TabList>
-        <TabPanels>
+        borderRadius="xl"
+        boxShadow="2xl"
+        mt={10}
+        w={boxWidth}
+        textAlign="center"
+      >
+        <Heading size="lg" color="blue.600" mb={4}>
+          CareerVista: Unlock Your Dream Career
+        </Heading>
+
+        <Tabs variant="soft-rounded" colorScheme="blue" isFitted>
+          <TabList>
+            <Tab>Login</Tab>
+            <Tab>Sign Up</Tab>
+          </TabList>
+
+          <TabPanels>
             <TabPanel>
-            <JobSeekerLogin />
+              <JobSeekerLogin />
             </TabPanel>
             <TabPanel>
-            <JobSeekerSignUp />
+              <JobSeekerSignUp />
             </TabPanel>
-        </TabPanels>
+          </TabPanels>
         </Tabs>
-    </Box>
+
+        <Button
+          mt={6}
+          colorScheme="pink"
+          variant="outline"
+          onClick={GoHome}
+        >
+          Home
+        </Button>
+      </Box>
     </Container>
   );
 };

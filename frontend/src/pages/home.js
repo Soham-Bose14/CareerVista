@@ -1,57 +1,68 @@
+// Beautified home.js
 import React from "react";
-import { useHistory } from 'react-router-dom';
-import bgImage from "../bgImage.jpg"
+import { useHistory } from "react-router-dom";
 import {
-    Container,
-    Box,
-    Button,
+  Box,
+  Heading,
+  Button,
+  VStack,
+  Container,
+  useBreakpointValue,
+  Text,
 } from "@chakra-ui/react";
-
+import bgImage from "../bgImage.jpg";
 
 const Home = () => {
-    const history = useHistory();
+  const history = useHistory();
+  const buttonSize = useBreakpointValue({ base: "md", md: "lg" });
 
-    const GoToCompany = async() => {
-        history.push({
-            pathname: '/company'
-        });
-    };
-
-    const GoToJobSeeker = async() => {
-        history.push({
-            pathname: '/jobSeeker'
-        });
-    };
-    
-    
-
-    return <Container maxW='xl' centerContent
-    bgImage={`url(${bgImage})`}
-    bgSize="cover"
-    bgPos="center"
-    height="100vh"
+  return (
+    <Container
+      maxW="100vw"
+      minH="100vh"
+      centerContent
+      bgImage={`url(${bgImage})`}
+      bgSize="cover"
+      bgPos="center"
+      p={0}
     >
-        <Box d="flex"
-            justifyContent="center"
-            p={3}
-            bg={"white"}
-            w="50%"
-            m="40px 0 15px 0"
-            borderRadius="lg"
-            borderWidth="1px"
-        >
-        <h2 fontSize='7xl' fontFamily='Work sans' color='green.600'>Career Vista: A Deep Insight Into Your Resume</h2>
-        </Box>
-        <Box bg="orange" w="50%" p={4} borderRadius="lg" color="black" borderWidth="1px">
-            <Button colorScheme="red" color="yellow" width="50%" style={{ marginTop:15 }} onClick={GoToCompany}>
-                Company
-            </Button>
-            <Button colorScheme="red" color="yellow" width="50%" style={{ marginTop:15 }} onClick={GoToJobSeeker}>
-                Job Seeker
-            </Button>
-        </Box>
+      <Box
+        bg="whiteAlpha.900"
+        p={8}
+        mt={12}
+        borderRadius="xl"
+        boxShadow="2xl"
+        textAlign="center"
+        maxW={{ base: "90%", md: "70%", lg: "50%" }}
+      >
+        <Heading color="teal.600" size="2xl" mb={4}>
+          Welcome to CareerVista
+        </Heading>
+        <Text fontSize="lg" mb={8}>
+          Discover, Apply and Succeed in Your Dream Job
+        </Text>
 
+        <VStack spacing={5}>
+          <Button
+            colorScheme="teal"
+            size={buttonSize}
+            width="100%"
+            onClick={() => history.push("/company")}
+          >
+            Company Login
+          </Button>
+          <Button
+            colorScheme="blue"
+            size={buttonSize}
+            width="100%"
+            onClick={() => history.push("/jobSeeker")}
+          >
+            Job Seeker Login
+          </Button>
+        </VStack>
+      </Box>
     </Container>
+  );
 };
 
 export default Home;
