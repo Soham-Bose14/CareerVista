@@ -10,7 +10,6 @@ import {
   Button,
   Heading,
   Input,
-  Textarea,
   VStack,
   Table,
   Thead,
@@ -19,6 +18,8 @@ import {
   Th,
   Td,
   useBreakpointValue,
+  FormControl,
+  FormLabel
 } from "@chakra-ui/react";
 
 const CompanyOptions = () => {
@@ -27,7 +28,8 @@ const CompanyOptions = () => {
   const [jobs, setJobs] = useState([]);
   const [activeTab, setActiveTab] = useState("");
   const [loading, setLoading] = useState(false);
-  const [newJob, setNewJob] = useState({ jobID: "", jobDescription: "" });
+  const [jobDescriptionFile, setJobDescriptionFile] = useState("");
+  const [newJob, setNewJob] = useState({ jobID: "", jobDescription: jobDescriptionFile });
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -72,10 +74,18 @@ const CompanyOptions = () => {
 
   const AddJob = async () => {
     const companyID = localStorage.getItem("companyID");
+    const formData = new FormData();
+    formData.append("jobID", newJob.jobID);
+    formData.append("companyID", companyID);
+    formData.append("jobDescription", jobDescriptionFile);
+
     try {
-      await axios.post("http://localhost:4000/company/addJob", { ...newJob, companyID });
+      await axios.post("http://localhost:4000/company/addJob", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
       toast({ title: "Job Added Successfully", status: "success", duration: 3000, isClosable: true });
       setNewJob({ jobID: "", jobDescription: "" });
+      setJobDescriptionFile("");
     } catch (error) {
       toast({ title: "Error adding job", description: error.response?.data?.message || "Server error", status: "error", duration: 3000, isClosable: true });
     }
@@ -109,14 +119,37 @@ const CompanyOptions = () => {
           <Box bg="white" p={6} borderRadius="xl" boxShadow="md" overflowX="auto" w={boxWidth} mx="auto">
             <Heading size="md" mb={4}>Jobs Posted:</Heading>
             <Table variant="striped" size="md">
-              <Thead><Tr><Th>Job ID</Th><Th>Description</Th><Th>Update</Th><Th>Search Candidates</Th></Tr></Thead>
+              <Thead>
+                <Tr>
+                  <Th>Job ID</Th>
+                  <Th>Job Description</Th>
+                  <Th>Update</Th>
+                  <Th>Search Candidates</Th>
+                </Tr>
+              </Thead>
               <Tbody>
                 {jobs.map((job, index) => (
                   <Tr key={index}>
                     <Td>{job.jobID}</Td>
-                    <Td>{job.jobDescription}</Td>
-                    <Td><Button colorScheme="teal" size="sm" onClick={() => UpdateJob(job.jobID)}>Update</Button></Td>
-                    <Td><Button colorScheme="blue" size="sm" onClick={() => SearchCandidates(job.jobID, job.jobDescription)}>Search</Button></Td>
+                    <Td>
+                      {job.jobDescription ? (
+                        <a
+                          href={`http://localhost:4000/download/jobDescription/${job.jobDescription}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button size="sm" colorScheme="gray">Download</Button>
+                        </a>
+                      ) : (
+                        "Not Available"
+                      )}
+                    </Td>
+                    <Td>
+                      <Button colorScheme="teal" size="sm" onClick={() => UpdateJob(job.jobID)}>Update</Button>
+                    </Td>
+                    <Td>
+                      <Button colorScheme="blue" size="sm" onClick={() => SearchCandidates(job.jobID, job.jobDescription)}>Search</Button>
+                    </Td>
                   </Tr>
                 ))}
               </Tbody>
@@ -129,27 +162,24 @@ const CompanyOptions = () => {
             <Heading size="md" mb={4}>Add a New Job</Heading>
             <VStack spacing={4}>
               <Input name="jobID" placeholder="Job ID" value={newJob.jobID} onChange={handleInputChange} />
-              <Textarea name="jobDescription" placeholder="Job Description" value={newJob.jobDescription} onChange={handleInputChange} />
+              <FormControl isRequired>
+                <FormLabel>Upload Job Description (PDF, DOC, DOCX, TXT)</FormLabel>
+                <Input
+                  type="file"
+                  accept=".pdf, .doc, .docx, .txt"
+                  onChange={(e) => setJobDescriptionFile(e.target.files[0])}
+                  p={1.5}
+                  border="1px solid #E2E8F0"
+                  borderRadius="6px"
+                />
+              </FormControl>
               <Button colorScheme="teal" onClick={AddJob}>Submit Job</Button>
             </VStack>
           </Box>
         )}
-        <Button
-          mt={6}
-          colorScheme="pink"
-          variant="outline"
-          onClick={GoHome}
-        >
-          Home
-        </Button>
-        <Button
-          mt={6}
-          colorScheme="pink"
-          variant="outline"
-          onClick={GoBack}
-        >
-          Back
-        </Button>
+
+        <Button mt={6} colorScheme="pink" variant="outline" onClick={GoHome}>Home</Button>
+        <Button mt={6} colorScheme="pink" variant="outline" onClick={GoBack}>Back</Button>
       </Container>
     </Box>
   );

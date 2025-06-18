@@ -25,32 +25,38 @@ app.use(express.json());
 app.use(cors());
 app.use(fileUpload());
 
-let gfsBucket;
+let resumeBucket, jdBucket;
 
 mongoose.connection.once('open', () => {
-    gfsBucket = new GridFSBucket(mongoose.connection.db, {
-        bucketName: 'resumes'
-    });
-    console.log("GridFSBucket ready.");
+  resumeBucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'resumes' });
+  jdBucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'jobDescriptions' });
+  console.log("GridFS Buckets ready.");
 });
 
-const getFileBufferFromGridFS = async(fileID) => {
-    return new Promise((resolve, reject) => {
-        const chunks = [];
 
-        const downloadStream = gfsBucket.openDownloadStream(new ObjectId(fileID));
+const getResumeBufferFromGridFS = async (fileID) => {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const downloadStream = resumeBucket.openDownloadStream(new ObjectId(fileID));
 
-        downloadStream.on('data', (chunk) => {
-            chunks.push(chunk);
-        });
-        downloadStream.on('end', () => {
-            resolve(Buffer.concat(chunks));
-        });
-        downloadStream.on('error', (err) => {
-            reject(err);
-        });
-    });
+    downloadStream.on('data', chunk => chunks.push(chunk));
+    downloadStream.on('end', () => resolve(Buffer.concat(chunks)));
+    downloadStream.on('error', err => reject(err));
+  });
 };
+
+const getJobDescriptionBufferFromGridFS = async (fileID) => {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const downloadStream = jdBucket.openDownloadStream(new ObjectId(fileID));
+
+    downloadStream.on('data', chunk => chunks.push(chunk));
+    downloadStream.on('end', () => resolve(Buffer.concat(chunks)));
+    downloadStream.on('error', err => reject(err));
+  });
+};
+
+
 
 app.post('/jobSeekerSignUp', async (req, res) => {
   try {
@@ -85,7 +91,7 @@ app.post('/jobSeekerSignUp', async (req, res) => {
     readableStream.push(file.data);
     readableStream.push(null); // End of stream
 
-    const uploadStream = gfsBucket.openUploadStream(file.name, {
+    const uploadStream = resumeBucket.openUploadStream(file.name, {
       contentType: file.mimetype,
       metadata: { uploadedBy: jobSeekerEmail }
     });
@@ -179,113 +185,126 @@ app.post('/uploadCompanyDetails', async (req, res) => {
 });
 
 app.post('/company/searchCandidates', async (req, res) => {
+  try {
+    const { companyID, jobID } = req.body;
+    console.log(`Received company ID: ${companyID}, job ID: ${jobID}`);
+
+    // ✅ Step 1: Fetch the job document
+    const job = await Jobs.findOne({ jobID }).exec();
+    if (!job) return res.status(404).json({ message: "Job not found" });
+
+    // ✅ Step 2: Get job description file from GridFS
+    let jdBase64 = null;
     try {
-        const { companyID, jobID } = req.body;
-        console.log(`Received company ID: ${companyID}, job ID: ${jobID}`);
+      const fileId = job.jobDescription;
+      if (!fileId) {
+        return res.status(400).json({ message: "Job description fileId missing in job document" });
+      }
 
-        const job = await Jobs.findOne({ jobID }).exec();
-        if (!job) return res.status(404).json({ message: "Job not found" });
-
-        const jdText = job.jobDescription;
-
-        const result = await JobApplication.findOne({ jobID }).exec();
-        if (!result) return res.status(404).json({ message: "This job doesn't exist" });
-
-        const fullCandidateData = [];
-
-        for (const id of result.jobSeekerID) {
-            const candidate = await JobSeeker.findOne({ id }, {
-                _id: 0,
-                id: 1,
-                username: 1,
-                name: 1,
-                email: 1,
-            }).lean();
-
-            const resumeEntry = await Resume.findOne({ jobSeekerId: id }, {
-                _id: 0,
-                resumeId: 1,
-                fileId: 1,
-            }).lean();
-
-            let resumeBase64 = null;
-
-            try {
-                if (resumeEntry?.fileId) {
-                    const buffer = await getFileBufferFromGridFS(resumeEntry.fileId);
-                    resumeBase64 = buffer.toString('base64');
-                }
-            } catch (err) {
-                console.error(`Error retrieving resume for jobSeeker ${id}:`, err.message);
-            }
-
-            fullCandidateData.push({
-                id: candidate?.id,
-                username: candidate?.username,
-                name: candidate?.name,
-                email: candidate?.email,
-                resumeId: resumeEntry?.resumeId || null,
-                fileId: resumeEntry?.fileId || null,
-                resumeBase64, // this will go to Python and be returned with similarity
-            });
-        }
-
-        // Create data to send to Python
-        const pythonPayload = {
-            jdText,
-            resumes: fullCandidateData.map(c => ({
-                id: c.id,
-                resumeBase64: c.resumeBase64 || ''
-            })),
-        };
-
-        const pythonProcess = spawn('C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe', ['compute_similarity.py']);
-        pythonProcess.stdin.write(JSON.stringify(pythonPayload));
-        pythonProcess.stdin.end();
-
-        let output = '';
-
-        pythonProcess.stdout.on('data', (data) => {
-            output += data.toString();
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            console.error('Python error:', data.toString());
-        });
-
-        pythonProcess.on('close', (code) => {
-            try {
-                const similarityResults = JSON.parse(output); // [{ id, similarityScore }, ...]
-                console.log('Python raw output:', output);
-
-
-                // Merge similarity into fullCandidateData
-                const enrichedCandidates = fullCandidateData.map(candidate => {
-                    const scoreEntry = similarityResults.find(s => s.id === candidate.id);
-                    return {
-                        ...candidate,
-                        similarityScore: scoreEntry?.similarityScore || 0
-                    };
-                });
-
-                // Sort by similarityScore DESC
-                enrichedCandidates.sort((a, b) => b.similarityScore - a.similarityScore);
-
-                console.log(`Sending matching job profiles to frontend: `, enrichedCandidates);
-
-                res.json(enrichedCandidates);
-            } catch (err) {
-                console.error('Failed to parse Python output:', err.message);
-                res.status(500).json({ message: 'Invalid output from Python script' });
-            }
-        });
-
-    } catch (error) {
-        console.error('Error:', error.message);
-        res.status(500).json({ message: 'Server error' });
+      console.log("🔍 Retrieving job description file:", fileId);
+      const buffer = await getJobDescriptionBufferFromGridFS(fileId);
+      jdBase64 = buffer.toString('base64');
+    } catch (err) {
+      console.error("❌ Error retrieving job description from GridFS:", err.message);
+      return res.status(500).json({ message: "Error retrieving job description file" });
     }
-});
 
+    // ✅ Step 3: Get applicants for the job
+    const applicationDoc = await JobApplication.findOne({ jobID }).exec();
+    if (!applicationDoc) return res.status(404).json({ message: "No applications for this job" });
+
+    const fullCandidateData = [];
+
+    for (const id of applicationDoc.jobSeekerID) {
+      const candidate = await JobSeeker.findOne({ id }, {
+        _id: 0,
+        id: 1,
+        username: 1,
+        name: 1,
+        email: 1,
+      }).lean();
+
+      const resumeEntry = await Resume.findOne({ jobSeekerId: id }, {
+        _id: 0,
+        resumeId: 1,
+        fileId: 1,
+      }).lean();
+
+      let resumeBase64 = null;
+      try {
+        if (resumeEntry?.fileId) {
+          const buffer = await getResumeBufferFromGridFS(resumeEntry.fileId);
+          resumeBase64 = buffer.toString('base64');
+        }
+      } catch (err) {
+        console.error(`⚠️ Error retrieving resume for jobSeeker ${id}:`, err.message);
+      }
+
+      fullCandidateData.push({
+        id: candidate?.id,
+        username: candidate?.username,
+        name: candidate?.name,
+        email: candidate?.email,
+        resumeId: resumeEntry?.resumeId || null,
+        fileId: resumeEntry?.fileId || null,
+        resumeBase64,
+      });
+    }
+
+    // ✅ Step 4: Run Python script to compute similarity
+    const pythonPayload = {
+      jdBase64,
+      resumes: fullCandidateData.map(c => ({
+        id: c.id,
+        resumeBase64: c.resumeBase64 || ''
+      })),
+    };
+
+    const pythonProcess = spawn(
+      'C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe',
+      ['compute_similarity.py']
+    );
+
+    pythonProcess.stdin.write(JSON.stringify(pythonPayload));
+    pythonProcess.stdin.end();
+
+    let output = '';
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      console.error('🐍 Python error:', data.toString());
+    });
+
+    pythonProcess.on('close', (code) => {
+      try {
+        const similarityResults = JSON.parse(output); // [{ id, similarityScore }]
+        console.log('📊 Python raw output:', output);
+
+        const enrichedCandidates = fullCandidateData.map(candidate => {
+          const scoreEntry = similarityResults.find(s => s.id === candidate.id);
+          return {
+            ...candidate,
+            similarityScore: scoreEntry?.similarityScore || 0
+          };
+        });
+
+        enrichedCandidates.sort((a, b) => b.similarityScore - a.similarityScore);
+
+        console.log(`✅ Sorted candidates ready for frontend`);
+        res.json(enrichedCandidates);
+      } catch (err) {
+        console.error('❌ Failed to parse Python output:', err.message);
+        res.status(500).json({ message: 'Invalid output from Python script' });
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in /company/searchCandidates:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 app.post('/companyAuthentication', async(req, res) => {
     try{
@@ -328,51 +347,112 @@ app.post('/company/viewJobs', async(req, res) => {
 
 });
 
-app.post('/company/addJob', async(req, res) => {
-    try{
-        const { jobID, jobDescription, companyID } = req.body;
+app.post('/company/addJob', async (req, res) => {
+  try {
+    const { jobID, companyID } = req.body;
 
-        console.log(`Job ID received: ${jobID}`);
-        console.log(`Job description received: ${jobDescription}`);
-        console.log(`Company ID received: ${companyID}`);
+    console.log(`Job ID received: ${jobID}`);
+    console.log(`Company ID received: ${companyID}`);
 
-        if(!jobID || !jobDescription || !companyID){
-            return res.status(400).json({ message: 'Missing one or more required fields!'});
-        }
-        const newJob = await Jobs.create({
-            jobID,
-            companyID,
-            jobDescription,
-        });
-        
-        res.status(201).json({
-            message: 'Your company is added successfully',
-            data: newJob
-        });
-
-    }catch(error){
-        console.error('Error uploading job description: ', error);
-        res.status(500).json({ message: 'Server error while uploading job description'});
+    // ✅ Validate required fields
+    if (!jobID || !companyID || !req.files || !req.files.jobDescription) {
+      return res.status(400).json({ message: 'Missing required fields or job description file!' });
     }
+
+    const file = req.files.jobDescription;
+
+    // ✅ Convert file buffer to readable stream
+    const readableStream = new Readable();
+    readableStream.push(file.data);
+    readableStream.push(null); // Mark end of stream
+
+    // ✅ Upload job description to GridFS
+    const uploadStream = jdBucket.openUploadStream(file.name, {
+      contentType: file.mimetype,
+      metadata: { uploadedBy: companyID }
+    });
+
+
+    readableStream.pipe(uploadStream);
+
+    uploadStream.on('finish', async () => {
+      // ✅ Create new job document with file ID
+      const newJob = await Jobs.create({
+        jobID,
+        companyID,
+        jobDescription: uploadStream.id
+      });
+
+      res.status(201).json({
+        message: 'Job description uploaded and job created successfully',
+        data: newJob
+      });
+    });
+
+    uploadStream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.status(500).json({ message: 'Job description file upload failed' });
+    });
+
+  } catch (error) {
+    console.error('Error uploading job description:', error);
+    res.status(500).json({ message: 'Server error while uploading job description' });
+  }
 });
 
-app.post('/company/editJob', async(req, res) => {
-    const { jobID, jobDescription } = req.body;
 
-    try{
-        await Jobs.updateOne(
-            { jobID: jobID },
-            { $set: { jobDescription: jobDescription } },
-        );
-        console.log("Job description updated successfully.")
-    }catch(error){
-        console.error(`Error while editing job description: ${error}`);
+app.post('/company/editJob', async (req, res) => {
+  try {
+    const { jobID } = req.body;
+
+    // ✅ Validate required fields
+    if (!jobID || !req.files || !req.files.jobDescriptionFile) {
+      return res.status(400).json({ message: 'Missing job ID or job description file!' });
     }
 
+    const file = req.files.jobDescriptionFile;
+
+    // ✅ Convert file buffer to readable stream
+    const readableStream = new Readable();
+    readableStream.push(file.data);
+    readableStream.push(null);
+
+    // ✅ Upload new job description file to GridFS
+    const uploadStream = gfsBucket.openUploadStream(file.name, {
+      contentType: file.mimetype,
+      metadata: { updatedFor: jobID }
+    });
+
+    readableStream.pipe(uploadStream);
+
+    uploadStream.on('finish', async () => {
+      // ✅ Update job document with new file ID
+      const result = await Jobs.updateOne(
+        { jobID: jobID },
+        { $set: { jobDescriptionFileId: uploadStream.id } }
+      );
+
+      console.log("Job description updated successfully.");
+      res.status(200).json({
+        message: 'Job description updated successfully',
+        updated: result
+      });
+    });
+
+    uploadStream.on('error', (err) => {
+      console.error('Stream error during update:', err);
+      res.status(500).json({ message: 'File upload failed during update' });
+    });
+
+  } catch (error) {
+    console.error(`Error while editing job description: ${error}`);
+    res.status(500).json({ message: 'Server error while editing job description' });
+  }
 });
 
 // Route: Get job and company details
 // GET /jobSeeker/viewApplications?jobSeekerID=1
+
 app.get('/jobSeeker/viewApplications', async (req, res) => {
   try {
     let { jobSeekerID } = req.query;
@@ -400,14 +480,11 @@ app.get('/jobSeeker/viewApplications', async (req, res) => {
         }
       },
       { $unwind: "$jobDetails" },
-
-      // OPTIONAL: Convert to string in case of type mismatch
       {
         $addFields: {
           "jobDetails.companyID": { $toString: "$jobDetails.companyID" }
         }
       },
-
       {
         $lookup: {
           from: "company",
@@ -417,28 +494,61 @@ app.get('/jobSeeker/viewApplications', async (req, res) => {
         }
       },
       { $unwind: { path: "$companyDetails", preserveNullAndEmptyArrays: false } },
-
       {
         $project: {
           _id: 0,
           jobID: 1,
           companyID: "$jobDetails.companyID",
-          jobDescription: "$jobDetails.jobDescription",
+          jobDescriptionFileId: "$jobDetails.jobDescription", // previously was jobDescription text
           companyName: "$companyDetails.companyName"
         }
       }
     ]);
 
+    // Generate signed/download URLs for jobDescription files
+    const results = applications.map(app => ({
+      ...app,
+      jobDescriptionUrl: `/download/jobDescription/${app.jobDescriptionFileId}` // provide route
+    }));
 
-    console.log("✅ Final filtered applications for jobSeekerID:", jobSeekerID, applications);
+    console.log("✅ Final filtered applications for jobSeekerID:", jobSeekerID, results);
 
-    return res.json(applications);
+    return res.json(results);
   } catch (err) {
     console.error('❌ Final error fetching applications:', err);
     return res.status(500).json({ message: 'Server error' });
   }
 });
 
+app.get('/download/jobDescription/:fileId', async (req, res) => {
+  try {
+    const fileId = new ObjectId(req.params.fileId);
+
+    const files = await jdBucket.find({ _id: fileId }).toArray();
+    if (!files || files.length === 0) {
+      return res.status(404).json({ message: 'File not found in GridFS' });
+    }
+
+    const file = files[0];
+
+    res.set({
+      'Content-Type': file.contentType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${file.filename}"`,
+    });
+
+    const fileStream = jdBucket.openDownloadStream(fileId);
+
+    fileStream.on('error', (err) => {
+      console.error('GridFS download error:', err);
+      res.status(500).json({ message: 'File stream error' });
+    });
+
+    fileStream.pipe(res);
+  } catch (err) {
+    console.error('Error in download route:', err);
+    res.status(500).json({ message: 'Server error during download' });
+  }
+});
 
 app.delete('/jobSeeker/deleteApplication', async (req, res) => {
   try {

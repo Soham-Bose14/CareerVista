@@ -21,26 +21,19 @@ const JobSeekerOptions = () => {
   const location = useLocation();
   const history = useHistory();
   const [activeTab, setActiveTab] = useState("");
-
   const [jobs, setJobs] = useState([]);
   const [applicationData, setApplicationData] = useState([]);
 
   const ViewJobApplications = async () => {
     const jobSeekerID = localStorage.getItem("jobSeekerID");
-
-    console.log(`JobSeekerID in local storage: ${jobSeekerID}`)
-
+    console.log(`JobSeekerID in local storage: ${jobSeekerID}`);
     if (!jobSeekerID) return;
 
     try {
-      const response = await axios.get(
-        `http://localhost:4000/jobSeeker/viewApplications`,
-        {
-          params: { jobSeekerID },
-          headers: { "Content-type": "application/json" },
-        }
-      );
-
+      const response = await axios.get("http://localhost:4000/jobSeeker/viewApplications", {
+        params: { jobSeekerID },
+        headers: { "Content-type": "application/json" },
+      });
 
       if (!(response.data.length > 0)) {
         throw new Error("No applications found!");
@@ -67,20 +60,13 @@ const JobSeekerOptions = () => {
   const DeleteJobApplication = async (jobID) => {
     const jobSeekerID = localStorage.getItem("jobSeekerID");
     try {
-      const config = {
-        headers: { "Content-type": "application/json" },
-      };
-      await axios.delete(
-        "http://localhost:4000/jobSeeker/deleteApplication",
-        {
-          data: { jobID, jobSeekerID },
-          ...config,
-        }
-      );
+      const config = { headers: { "Content-type": "application/json" } };
+      await axios.delete("http://localhost:4000/jobSeeker/deleteApplication", {
+        data: { jobID, jobSeekerID },
+        ...config,
+      });
 
-      setApplicationData(prev =>
-        prev.filter((job) => job.jobID !== jobID)
-      );
+      setApplicationData(prev => prev.filter((job) => job.jobID !== jobID));
 
       toast({
         title: "Deletion successful.",
@@ -101,12 +87,9 @@ const JobSeekerOptions = () => {
   const ShowJobs = async () => {
     try {
       const response = await axios.get("http://localhost:4000/jobSeeker/viewJobs");
+      if (response.data.length === 0) throw new Error("No jobs found!");
 
-      if (response.data.length === 0) {
-        throw new Error("No jobs found!");
-      }
       console.log("Jobs from backend:", response.data);
-
       setJobs(response.data);
 
       toast({
@@ -127,7 +110,6 @@ const JobSeekerOptions = () => {
 
   const Apply = async (jobID) => {
     const jobSeekerID = localStorage.getItem("jobSeekerID");
-
     console.log("🔥 APPLY button clicked with:", { jobID, jobSeekerID });
 
     if (!jobSeekerID || !jobID || jobID === "null" || jobID === "undefined") {
@@ -142,20 +124,11 @@ const JobSeekerOptions = () => {
     }
 
     try {
-      const config = {
-        headers: { "Content-type": "application/json" },
-      };
-
-      const response = await axios.post(
-        "http://localhost:4000/jobSeeker/addApplication",
-        { jobID, jobSeekerID },
-        config
-      );
-
+      const config = { headers: { "Content-type": "application/json" } };
+      const response = await axios.post("http://localhost:4000/jobSeeker/addApplication", { jobID, jobSeekerID }, config);
       console.log("✅ Backend response:", response.data);
 
       const msg = response.data.message;
-
       if (msg === "JobSeekerID added successfully") {
         toast({
           title: "Application submitted successfully.",
@@ -184,51 +157,21 @@ const JobSeekerOptions = () => {
     }
   };
 
-  const GoHome = () => {
-    history.push({ pathname: "/" });
-  };
-
-  const GoBack = () => {
-    history.push({ pathname: "/jobSeeker" });
-  };
+  const GoHome = () => history.push({ pathname: "/" });
+  const GoBack = () => history.push({ pathname: "/jobSeeker" });
 
   return (
-    <Box
-      bgImage={`url(${bgImage})`}
-      bgSize="cover"
-      bgPos="center"
-      minH="100vh"
-      py={8}
-    >
+    <Box bgImage={`url(${bgImage})`} bgSize="cover" bgPos="center" minH="100vh" py={8}>
       <Container maxW="6xl">
-        <Box
-          bg="white"
-          p={6}
-          borderRadius="lg"
-          boxShadow="lg"
-          textAlign="center"
-          mb={6}
-        >
+        <Box bg="white" p={6} borderRadius="lg" boxShadow="lg" textAlign="center" mb={6}>
           <Heading as="h2" size="xl" mb={4}>
             CareerVista: The Perfect Portal for Jobs
           </Heading>
           <Box display="flex" justifyContent="center" gap={4} flexWrap="wrap">
-            <Button
-              colorScheme={activeTab === "view" ? "teal" : "gray"}
-              onClick={() => {
-                setActiveTab("view");
-                ViewJobApplications();
-              }}
-            >
+            <Button colorScheme={activeTab === "view" ? "teal" : "gray"} onClick={() => { setActiveTab("view"); ViewJobApplications(); }}>
               View Job Applications
             </Button>
-            <Button
-              colorScheme={activeTab === "apply" ? "teal" : "gray"}
-              onClick={() => {
-                setActiveTab("apply");
-                ShowJobs();
-              }}
-            >
+            <Button colorScheme={activeTab === "apply" ? "teal" : "gray"} onClick={() => { setActiveTab("apply"); ShowJobs(); }}>
               Apply for Job
             </Button>
           </Box>
@@ -236,16 +179,14 @@ const JobSeekerOptions = () => {
 
         {activeTab === "view" && (
           <Box bg="white" p={6} borderRadius="lg" boxShadow="md" overflowX="auto">
-            <Heading size="md" mb={4}>
-              Jobs you have applied for:
-            </Heading>
+            <Heading size="md" mb={4}>Jobs you have applied for:</Heading>
             <Table variant="striped" size="md">
               <Thead>
                 <Tr>
                   <Th>Job ID</Th>
                   <Th>Company ID</Th>
                   <Th>Company Name</Th>
-                  <Th>Description</Th>
+                  <Th>Job Description</Th>
                   <Th>Delete Application</Th>
                 </Tr>
               </Thead>
@@ -255,13 +196,19 @@ const JobSeekerOptions = () => {
                     <Td>{job.jobID}</Td>
                     <Td>{job.companyID}</Td>
                     <Td>{job.companyName}</Td>
-                    <Td>{job.jobDescription}</Td>
                     <Td>
-                      <Button
-                        colorScheme="teal"
-                        size="sm"
-                        onClick={() => DeleteJobApplication(job.jobID)}
-                      >
+                      {job.jobDescriptionUrl ? (
+                        <a
+                          href={`http://localhost:4000${job.jobDescriptionUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button size="sm" colorScheme="gray">Download</Button>
+                        </a>
+                      ) : "Not Available"}
+                    </Td>
+                    <Td>
+                      <Button colorScheme="teal" size="sm" onClick={() => DeleteJobApplication(job.jobID)}>
                         Delete
                       </Button>
                     </Td>
@@ -274,9 +221,7 @@ const JobSeekerOptions = () => {
 
         {activeTab === "apply" && (
           <Box bg="white" p={6} borderRadius="lg" boxShadow="md">
-            <Heading size="md" mb={4}>
-              Browse jobs
-            </Heading>
+            <Heading size="md" mb={4}>Browse jobs</Heading>
             <Table variant="striped" size="md">
               <Thead>
                 <Tr>
@@ -294,29 +239,22 @@ const JobSeekerOptions = () => {
                     <Td>{job.jobID}</Td>
                     <Td>{job.companyID}</Td>
                     <Td>{job.companyName}</Td>
-                    <Td>{job.jobDescription}</Td>
+                    <Td>
+                      {job.jobDescription ? (
+                        <a
+                          href={`http://localhost:4000/download/jobDescription/${job.jobDescription}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button size="sm" colorScheme="gray">Download</Button>
+                        </a>
+                      ) : "Not Available"}
+                    </Td>
                     <Td>{job.tags || "—"}</Td>
                     <Td>
-                      <Button
-                        colorScheme="teal"
-                        size="sm"
-                        onClick={() => {
-                          if (!job.jobID) {
-                            console.warn("❌ Cannot apply — jobID is missing!", job);
-                            toast({
-                              title: "Invalid job ID. Please refresh the page.",
-                              status: "error",
-                              duration: 3000,
-                              isClosable: true,
-                            });
-                            return;
-                          }
-                          Apply(job.jobID);
-                        }}
-                      >
+                      <Button colorScheme="teal" size="sm" onClick={() => Apply(job.jobID)}>
                         Apply
                       </Button>
-
                     </Td>
                   </Tr>
                 ))}
@@ -324,22 +262,9 @@ const JobSeekerOptions = () => {
             </Table>
           </Box>
         )}
-        <Button
-          mt={6}
-          colorScheme="pink"
-          variant="outline"
-          onClick={GoHome}
-        >
-          Home
-        </Button>
-        <Button
-          mt={6}
-          colorScheme="pink"
-          variant="outline"
-          onClick={GoBack}
-        >
-          Back
-        </Button>
+
+        <Button mt={6} colorScheme="pink" variant="outline" onClick={GoHome}>Home</Button>
+        <Button mt={6} colorScheme="pink" variant="outline" onClick={GoBack}>Back</Button>
       </Container>
     </Box>
   );

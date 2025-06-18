@@ -12,83 +12,89 @@ import re
 nltk.download(['stopwords', 'punkt'], quiet=True)
 
 from pdfminer.high_level import extract_text as extract_pdf_text
-import docx 
+import docx
 
 def extract_text_from_pdf(pdf_bytes):
     with BytesIO(pdf_bytes) as f:
         return extract_pdf_text(f)
-    
+
 def extract_text_from_docx(docx_bytes):
     with BytesIO(docx_bytes) as f:
         doc = docx.Document(f)
         full_text = []
-        
         for para in doc.paragraphs:
             full_text.append(para.text)
         return '\n'.join(full_text)
-    
+
 def clean_text(text):
     if not isinstance(text, str):
         return ""
-    
     try:
         text = text.lower()
         text = re.sub(r'\[.*?\]', '', text)
         text = re.sub(r'\b\d+[\.\d]*\b', '', text)
         text = re.sub(r'^\w\s', ' ', text)
-        
         words = word_tokenize(text)
-        
         stop_words = set(stopwords.words('english'))
-        
-        filtered_words = []
-        
-        for word in words:
-            if word not in stop_words:
-                filtered_words.append(word)
-        
+        filtered_words = [word for word in words if word not in stop_words]
         return ' '.join(filtered_words)
     except Exception as e:
         print(f"Error while processing the text: {e}")
-    
+        return ""
+
+def extract_text_from_base64(file_b64):
+    file_bytes = base64.b64decode(file_b64)
+    try:
+        text = extract_text_from_pdf(file_bytes)
+        if not text.strip():
+            raise ValueError("Empty PDF text")
+        return text
+    except Exception:
+        try:
+            text = extract_text_from_docx(file_bytes)
+            if not text.strip():
+                raise ValueError("Empty DOCX text")
+            return text
+        except Exception:
+            return file_bytes.decode('utf-8', errors='ignore')
+
 def main():
     data = json.load(sys.stdin)
-    jd_text = data['jdText']
+    jd_b64 = data['jdBase64']
     resumes = data['resumes']
-    
+
+    # ✅ Extract job description text
+    jd_raw_text = extract_text_from_base64(jd_b64)
+    jd_text = clean_text(jd_raw_text)
+
     results = []
-        
+
     for resume in resumes:
         resume_bytes = base64.b64decode(resume['resumeBase64'])
         try:
             resume_text = extract_text_from_pdf(resume_bytes)
             if not resume_text.strip():
-                raise ValueError("Empty pdf text")
-            
+                raise ValueError("Empty PDF")
         except Exception:
             try:
                 resume_text = extract_text_from_docx(resume_bytes)
                 if not resume_text.strip():
-                    raise ValueError("Empty DOCX text")
+                    raise ValueError("Empty DOCX")
             except Exception:
                 resume_text = resume_bytes.decode('utf-8', errors='ignore')
-        
+
         resume_text = clean_text(resume_text)
-        jd_text = clean_text(jd_text)
-        
+
         word_vectorizer = TfidfVectorizer(max_features=750, stop_words='english')
-    
         combined_vectors = word_vectorizer.fit_transform([resume_text, jd_text])
         score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
-        
+
         results.append({
             'id': resume['id'],
             'similarityScore': round(score * 100, 2),
         })
-        
-        # similarity_scores.append(score)
-        
+
     print(json.dumps(results))
-    
+
 if __name__ == "__main__":
     main()

@@ -6,7 +6,7 @@ import {
   Heading,
   Button,
   Container,
-  Textarea,
+  Input,
   VStack,
   Text,
 } from '@chakra-ui/react';
@@ -19,23 +19,32 @@ const UpdateJob = () => {
   const toast = useToast();
 
   const jobID = location.state?.jobID || "";
-
-  const [updatedJob, setUpdatedJob] = useState({
-    jobID: jobID,
-    jobDescription: "",
-  });
+  const [jobDescriptionFile, setJobDescriptionFile] = useState(null);
 
   const EditHandler = async () => {
+    if (!jobDescriptionFile) {
+      toast({
+        title: "No file selected.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     try {
-      const config = {
-        headers: {
-          "Content-type": "application/json",
-        },
-      };
+      const formData = new FormData();
+      formData.append("jobID", jobID);
+      formData.append("jobDescriptionFile", jobDescriptionFile);
+
       await axios.post(
         "http://localhost:4000/company/editJob",
-        updatedJob,
-        config
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
 
       toast({
@@ -97,13 +106,10 @@ const UpdateJob = () => {
         </Text>
 
         <Box mt={3} width="100%">
-          <Textarea
-            name="jobDescription"
-            placeholder="Enter new Job Description"
-            value={updatedJob.jobDescription}
-            onChange={(e) =>
-              setUpdatedJob({ ...updatedJob, jobDescription: e.target.value })
-            }
+          <Input
+            type="file"
+            accept=".doc,.docx,.pdf,.txt"
+            onChange={(e) => setJobDescriptionFile(e.target.files[0])}
           />
         </Box>
 

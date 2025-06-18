@@ -47,7 +47,7 @@ const Results = () => {
       const response = await axios.post('http://localhost:4000/sendEmail', {
         to: receiverEmail,
         subject: 'Shortlisted for interview.',
-        message: `Dear ${candidateName},\n\nThis is to inform that you are shortlisted by our company for the following role:\n${jobDescription}\n\nKindly report to the office for the interview on Monday at 9am.\n\n${companyName}\nContact: +91 9560885571`
+        message: `Dear ${candidateName},\n\nThis is to inform that you are shortlisted by our company for the given role.\n\nKindly report to the office for the interview on Monday at 9am.\n\n${companyName}\nContact: +91 9560885571`
       });
       console.log('Email sent:', response.data);
       toast({
@@ -87,7 +87,7 @@ const Results = () => {
         ) : (
           <>
             <Heading mb={6} color="teal.700" textAlign="center">
-              Similarity Results
+              Matching Candidates
             </Heading>
 
             {results.length > 0 ? (
@@ -99,7 +99,7 @@ const Results = () => {
                       <Th>Username</Th>
                       <Th>Name</Th>
                       <Th>Email</Th>
-                      <Th>Similarity Score</Th>
+                      <Th>Similarity</Th>
                       <Th>Interview</Th>
                     </Tr>
                   </Thead>
