@@ -8,6 +8,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import re
+import spacy
 
 nltk.download(['stopwords', 'punkt'], quiet=True)
 
@@ -57,8 +58,12 @@ def extract_text_from_base64(file_b64):
             return text
         except Exception:
             return file_bytes.decode('utf-8', errors='ignore')
+        
+def extract_noun_phrases(doc):
+    return " ".join(chunk.text.lower() for chunk in doc.noun_chunks)
 
 def main():
+    nlp = spacy.load("en_core_web_lg")
     data = json.load(sys.stdin)
     jd_b64 = data['jdBase64']
     resumes = data['resumes']
@@ -66,6 +71,12 @@ def main():
     # ✅ Extract job description text
     jd_raw_text = extract_text_from_base64(jd_b64)
     jd_text = clean_text(jd_raw_text)
+    
+    # New trial
+    jd_text = nlp(jd_text)
+    # jd_nouns = " ".join([token.lemma_ for token in jd_text if token.pos_ == "NOUN"])
+    jd_nouns = extract_noun_phrases(jd_text)
+    jd_nouns = nlp(jd_nouns)
 
     results = []
 
@@ -85,9 +96,18 @@ def main():
 
         resume_text = clean_text(resume_text)
 
-        word_vectorizer = TfidfVectorizer(max_features=750, stop_words='english')
-        combined_vectors = word_vectorizer.fit_transform([resume_text, jd_text])
-        score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
+        # word_vectorizer = TfidfVectorizer(max_features=750, stop_words='english')
+        # combined_vectors = word_vectorizer.fit_transform([resume_text, jd_text])
+        # score = cosine_similarity(combined_vectors[0], combined_vectors[1])[0][0]
+        
+        # New trial
+        
+        resume_text = nlp(resume_text)
+        # resume_nouns = " ".join([token.lemma_ for token in resume_text if token.pos_ == "NOUN"])
+        resume_nouns = extract_noun_phrases(resume_text)
+        resume_nouns = nlp(resume_nouns)
+        
+        score = jd_nouns.similarity(resume_nouns)
 
         results.append({
             'id': resume['id'],
